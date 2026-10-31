@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from nion.engine import Engine
 from nion.memory import Memory
 from nion.pipeline import pending_texts, render, translate_pending
-from nion.glossary import load_glossary
 
 
 class PipelineSafetyTests(unittest.TestCase):
@@ -34,9 +33,9 @@ class PipelineSafetyTests(unittest.TestCase):
             self.assertEqual(engine.asserted_input, ["Hello"])
             self.assertEqual(memory["Elio: Hello"], "Elio: Hola")
 
-    def test_non_masking_engine_does_not_save_wrong_glossary_term(self):
-        class WrongEngine(Engine):
-            name = "wrong-plain-test"
+    def test_pipeline_does_not_override_engine_translation_with_glossary_rules(self):
+        class PlainEngine(Engine):
+            name = "plain-translation-test"
             supports_masking = False
             max_batch = 1
 
@@ -47,11 +46,11 @@ class PipelineSafetyTests(unittest.TestCase):
             memory = self.memory(directory)
             entry = SimpleNamespace(text="Bronze Shield")
             translate_pending(
-                [entry], memory, WrongEngine(), "en", "es",
+                [entry], memory, PlainEngine(), "en", "es",
                 log=lambda _: None, protected_terms=[],
             )
-            self.assertNotIn("Bronze Shield", memory)
-            self.assertIsNone(render("Bronze Shield", memory, [], load_glossary()))
+            self.assertEqual(memory["Bronze Shield"], "Escudo de plata")
+            self.assertEqual(render("Bronze Shield", memory, []), "Escudo de plata")
 
     def test_masking_engine_protects_names_and_rpg_codes(self):
         class MaskedEngine(Engine):
@@ -79,15 +78,12 @@ class PipelineSafetyTests(unittest.TestCase):
                 r"Elio: Hola \C[2]",
             )
 
-    def test_old_memory_with_known_wrong_term_is_pending_again(self):
+    def test_existing_memory_is_reused_without_semantic_glossary_gate(self):
         with tempfile.TemporaryDirectory() as directory:
             memory = self.memory(directory)
-            memory.set("Bronze Shield", "Escudo de plata")
+            memory.set("Bronze Shield", "Escudo de bronce")
             entry = SimpleNamespace(text="Bronze Shield")
-            self.assertEqual(
-                pending_texts([entry], memory, [], load_glossary()),
-                ["Bronze Shield"],
-            )
+            self.assertEqual(pending_texts([entry], memory, []), [])
 
 
 if __name__ == "__main__":
