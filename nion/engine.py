@@ -86,7 +86,7 @@ class LlamaCppEngine(Engine):
         self.timeout = timeout
 
     @staticmethod
-    def _system_prompt(tgt):
+    def _system_prompt(tgt, strict=False):
         prompt = (
             "Eres traductor y editor profesional de localización de videojuegos RPG. "
             "Traduce el significado completo con naturalidad, precisión y coherencia "
@@ -110,15 +110,27 @@ class LlamaCppEngine(Engine):
                 "no 'Debe irnos'. Evita expresiones rígidas como 'bosque norteño' "
                 "cuando 'bosque del norte' resulte más natural."
             )
+        if strict:
+            prompt += (
+                " MODO DE REINTENTO ESTRICTO: los marcadores ⟦n⟧ son elementos "
+                "técnicos obligatorios, no palabras. Copia cada marcador exactamente "
+                "una vez y en el mismo orden. No escribas variantes, espacios dentro "
+                "del marcador ni texto adicional. Traduce toda la frase como una unidad; "
+                "no resumas ni reformules omitiendo información."
+            )
         return prompt
 
-    def translate_batch(self, texts, src, tgt):
+    def retry_masked(self, text, src, tgt):
+        """Reintenta una frase enmascarada con instrucciones más estrictas."""
+        return self.translate_batch([text], src, tgt, strict=True)[0]
+
+    def translate_batch(self, texts, src, tgt, strict=False):
         outputs = []
         for text in texts:
             payload = {
                 "model": "local-model",
                 "messages": [
-                    {"role": "system", "content": self._system_prompt(tgt)},
+                    {"role": "system", "content": self._system_prompt(tgt, strict=strict)},
                     {"role": "user", "content":
                      "Idioma origen: %s\nIdioma destino: %s\nTexto:\n%s" % (src, tgt, text)}
                 ],
