@@ -110,6 +110,45 @@ class QualityTests(unittest.TestCase):
             self.assertNotIn("Bronze Shield", memory)
             self.assertTrue(any("término RPG no conservado" in line for line in logs))
 
+    def test_accepts_contextual_rpg_term_variants(self):
+        glossary = load_glossary()
+        self.assertIsNone(quality_issue(
+            "A large, old shield that survived time.",
+            "Un escudo grande y viejo que ha resistido el paso del tiempo.",
+            "en", "es", glossary,
+        ))
+        self.assertIsNone(quality_issue(
+            "Linen clothing with high breathability.",
+            "Ropa de lino con buena ventilación.",
+            "en", "es", glossary,
+        ))
+
+    def test_compound_material_overrides_component_term(self):
+        glossary = load_glossary()
+        self.assertIsNone(quality_issue(
+            "A large shield made of iron steel.",
+            "Un escudo grande hecho de acero.",
+            "en", "es", glossary,
+        ))
+
+    def test_verified_rpg_descriptions_correct_known_grammar_and_material(self):
+        cases = {
+            "A vest made of tanned hide.": "Un chaleco hecho de cuero curtido.",
+            "A vest made of leather hardened with glue.": (
+                "Un chaleco de cuero endurecido con pegamento."
+            ),
+            "[Large Shield] A large shield made of iron steel.": (
+                "[Escudo grande] Un escudo grande hecho de acero."
+            ),
+        }
+        for source, expected in cases.items():
+            with self.subTest(source=source):
+                corrected, reason = verified_correction(
+                    source, "Traducción defectuosa", "en", "es"
+                )
+                self.assertEqual(corrected, expected)
+                self.assertTrue(reason)
+
     def test_normalizes_case_spacing_and_final_punctuation(self):
         corrected, reason = verified_correction(
             "  WE   SHOULD HURRY!! ", "Debemos acelerar", "en-US", "es-CO"
