@@ -52,7 +52,9 @@ def main(argv=None):
             print("TERMINADO. Memoria:", memory.path)
         else:
             output = args.out or data_dir.rstrip("/\\") + "_" + args.lang.lower()
-            applied, missing = apply_translations(args.game, output, memory, glossary=glossary)
+            applied, missing = apply_translations(
+                args.game, output, memory, glossary=glossary, tgt=args.lang
+            )
             if missing:
                 with open("faltan.txt", "w", encoding="utf-8") as fh:
                     fh.write("\n".join(missing))
