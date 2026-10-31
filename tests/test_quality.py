@@ -78,7 +78,7 @@ class QualityTests(unittest.TestCase):
             logs = []
             translate_pending([entry], memory, engine, "en", "es",
                               log=logs.append, protected_terms=[])
-            self.assertEqual(engine.retry_calls, 1)
+            self.assertEqual(engine.retry_calls, 0)
             self.assertEqual(memory["We should hurry."], "Deberíamos darnos prisa.")
             self.assertTrue(any("corrección verificada" in line for line in logs))
 
@@ -109,6 +109,35 @@ class QualityTests(unittest.TestCase):
                               log=logs.append, protected_terms=[])
             self.assertNotIn("Bronze Shield", memory)
             self.assertTrue(any("término RPG no conservado" in line for line in logs))
+
+    def test_pipeline_applies_verified_description_correction_without_retry(self):
+        class AwkwardEngine(Engine):
+            name = "awkward-description-test"
+            max_batch = 1
+
+            def __init__(self):
+                self.retry_calls = 0
+
+            def translate_batch(self, texts, src, tgt):
+                return ["A vestido hecho de cuero curtido."]
+
+            def retry_masked(self, text, src, tgt):
+                self.retry_calls += 1
+                return "A vestido hecho de cuero curtido."
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = AwkwardEngine()
+            memory = Memory(os.path.join(directory, "memory.json"))
+            entry = SimpleNamespace(text="A vest made of tanned hide.")
+            logs = []
+            translate_pending([entry], memory, engine, "en", "es",
+                              log=logs.append, protected_terms=[])
+            self.assertEqual(engine.retry_calls, 0)
+            self.assertEqual(
+                memory["A vest made of tanned hide."],
+                "Un chaleco hecho de cuero curtido.",
+            )
+            self.assertTrue(any("corrección verificada" in line for line in logs))
 
     def test_accepts_contextual_rpg_term_variants(self):
         glossary = load_glossary()
