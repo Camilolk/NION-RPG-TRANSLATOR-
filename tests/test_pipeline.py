@@ -79,7 +79,7 @@ class PipelineSafetyTests(unittest.TestCase):
             )
 
 
-    def test_description_receives_its_item_name_and_approved_translation(self):
+    def test_description_receives_its_item_name_as_context_only(self):
         class ContextEngine(Engine):
             name = "context-test"
             max_batch = 1
@@ -95,7 +95,7 @@ class PipelineSafetyTests(unittest.TestCase):
                 self.context = context
                 if text == "Linen Clothing":
                     return "Ropa de lino"
-                return "Ropa de lino con alta" + chr(10) + "transpirabilidad."
+                return "Ropa de lino con alta[[NION_TOKEN_0]]transpirabilidad."
 
         with tempfile.TemporaryDirectory() as directory:
             engine = ContextEngine()
