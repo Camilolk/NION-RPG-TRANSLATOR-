@@ -98,6 +98,24 @@ class Tests(unittest.TestCase):
         self.assertIsNone(unmask(masked + " [[NION_TOKEN_99]]", tokens))
         self.assertIsNone(unmask(masked.replace("[[NION_TOKEN_0]]", "[[NION_TOKEN_7]]"), tokens))
 
+
+    def test_mask_protects_exact_line_breaks(self):
+        for original in (
+            "First line\\nSecond line",
+            "First line\\r\\nSecond line",
+            "First line\\n\\nThird line",
+        ):
+            with self.subTest(original=original):
+                masked, tokens = mask(original)
+                self.assertNotIn("\\n", masked)
+                self.assertNotIn("\\r", masked)
+                self.assertEqual(unmask(masked, tokens), original)
+                self.assertEqual(
+                    sum(1 for token in tokens if token in ("\\n", "\\r\\n", "\\r")),
+                    original.count("\\n") if "\\r" not in original
+                    else original.count("\\r"),
+                )
+
     def test_proper_names_are_masked_and_restored(self):
         terms = ["Grant", "Elio", "Village Elder"]
         original = "Grant habló con Elio en Village Elder."
