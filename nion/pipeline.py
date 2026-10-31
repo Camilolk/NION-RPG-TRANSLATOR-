@@ -36,6 +36,8 @@ def _approve_translation(source, translated, src, tgt, glossary, protected_terms
         return None, "traducción vacía o inválida"
     if _has_unexpected_script(translated, tgt):
         return None, "la respuesta contiene caracteres de otro sistema de escritura"
+    if translated.count("\\n") != source.count("\\n"):
+        return None, "la respuesta alteró los saltos de línea del original"
 
     prepared = normalize_names(source, glossary)
     if not names_preserved(prepared, translated, protected_terms):
