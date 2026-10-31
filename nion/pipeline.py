@@ -59,6 +59,8 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     """Guarda memoria por lote; códigos y nombres oficiales quedan fuera del motor."""
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
+    if hasattr(engine, "set_terminology"):
+        engine.set_terminology(glossary.get("terms", {}))
     pending = pending_texts(entries, memory, protected_terms, glossary)
     log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
     leftovers = []
@@ -76,19 +78,25 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 prepared = normalize_names(original, glossary)
                 if restored is not None and not names_preserved(prepared, restored, protected_terms):
                     restored = None
-                if restored is not None and quality_issue(original, restored, src, tgt):
-                    log("  control de calidad: traducción sospechosa; reintentando...")
-                    if hasattr(engine, "retry_masked"):
-                        retried = engine.retry_masked(masked, src, tgt)
-                        restored = unmask(retried, tokens, engine.placeholder)
-                        if restored is not None and not names_preserved(prepared, restored, protected_terms):
-                            restored = None
-                    if restored is not None:
-                        corrected, reason = verified_correction(original, restored, src, tgt)
-                        if reason:
-                            log("  control de calidad: se aplicó una corrección verificada.")
-                            restored = corrected
-                elif restored is None and hasattr(engine, "retry_masked"):
+                if restored is not None:
+                    issue = quality_issue(original, restored, src, tgt, glossary)
+                    if issue:
+                        log("  control de calidad: %s; reintentando..." % issue)
+                        if hasattr(engine, "retry_masked"):
+                            retried = engine.retry_masked(masked, src, tgt)
+                            restored = unmask(retried, tokens, engine.placeholder)
+                            if restored is not None and not names_preserved(
+                                prepared, restored, protected_terms
+                            ):
+                                restored = None
+                        if restored is not None:
+                            corrected, reason = verified_correction(original, restored, src, tgt)
+                            if reason:
+                                log("  control de calidad: se aplicó una corrección verificada.")
+                                restored = corrected
+                            if quality_issue(original, restored, src, tgt, glossary):
+                                restored = None
+                elif hasattr(engine, "retry_masked"):
                     retried = engine.retry_masked(masked, src, tgt)
                     restored = unmask(retried, tokens, engine.placeholder)
                     if restored is not None and not names_preserved(prepared, restored, protected_terms):
