@@ -96,6 +96,17 @@ class LlamaCppTests(unittest.TestCase):
         with self.assertRaises(EngineError):
             LlamaCppEngine().translate_batch(["Hello"], "en", "es")
 
+    def test_prompt_includes_accepted_terminology_variants(self):
+        engine = LlamaCppEngine()
+        engine.set_terminology(
+            {"old shield": "escudo antiguo"},
+            {"old shield": ["escudo viejo"]},
+        )
+        prompt = engine._system_prompt("es", terminology=engine.terminology,
+                                       terminology_variants=engine.terminology_variants)
+        self.assertIn("escudo antiguo", prompt)
+        self.assertIn("escudo viejo", prompt)
+
     def test_engine_factory(self):
         self.assertEqual(get_engine("llamacpp").name, "llamacpp")
 
