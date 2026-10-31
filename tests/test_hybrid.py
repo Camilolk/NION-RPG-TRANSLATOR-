@@ -87,6 +87,32 @@ class HybridEngineTests(unittest.TestCase):
             request.get_header("Authorization"), "Bearer test-secret"
         )
 
+    @patch("nion.engine.time.sleep")
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_openrouter_retries_empty_response_then_succeeds(self, mocked, sleep):
+        mocked.side_effect = [
+            FakeResponse({"choices": [{"message": {"content": ""}}]}),
+            FakeResponse({"choices": [{"message": {"content": "Cuero endurecido"}}]}),
+        ]
+        engine = OpenRouterEngine(key="test-secret", model="test/model")
+        self.assertEqual(
+            engine.translate_batch(["Hard Leather"], "en", "es"),
+            ["Cuero endurecido"],
+        )
+        self.assertEqual(mocked.call_count, 2)
+        sleep.assert_called_once_with(2)
+
+    @patch("nion.engine.time.sleep")
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_openrouter_rejects_after_three_empty_responses(self, mocked, sleep):
+        empty = FakeResponse({"choices": [{"message": {"content": ""}}]})
+        mocked.side_effect = [empty, empty, empty]
+        engine = OpenRouterEngine(key="test-secret", model="test/model")
+        with self.assertRaisesRegex(EngineError, "vacía tras 3 intentos"):
+            engine.translate_batch(["Hard Leather"], "en", "es")
+        self.assertEqual(mocked.call_count, 3)
+        self.assertEqual(sleep.call_count, 2)
+
     def test_cjk_contamination_is_rejected_for_spanish(self):
         glossary = load_glossary()
         approved, issue = _approve_translation(
