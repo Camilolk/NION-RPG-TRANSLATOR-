@@ -56,7 +56,7 @@ class LossyEngine(Engine):
     name = "lossy"
 
     def translate_batch(self, texts, src, tgt):
-        return ["X:" + re.sub(r"\\[\\[NION_TOKEN_\\d+\\]\\]", "", t) for t in texts]
+        return ["X:" + re.sub(r"\[\[NION_TOKEN_\d+\]\]", "", t) for t in texts]
 
 
 class Tests(unittest.TestCase):
