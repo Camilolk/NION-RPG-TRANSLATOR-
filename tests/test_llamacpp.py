@@ -55,6 +55,7 @@ class LlamaCppTests(unittest.TestCase):
         self.assertIn("Debemos apresurarnos", prompt)
         self.assertIn("del norte", prompt)
         self.assertIn("[[NION_TOKEN_n]]", prompt)
+        self.assertEqual(payload["messages"][1]["content"], "We should hurry.")
 
     @patch("nion.engine.urllib.request.urlopen")
     def test_other_languages_do_not_receive_spanish_specific_rules(self, mocked):
