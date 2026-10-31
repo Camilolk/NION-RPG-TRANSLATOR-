@@ -116,7 +116,32 @@ class PipelineSafetyTests(unittest.TestCase):
                 "Ropa de lino con alta\\ntranspirabilidad.",
             )
             self.assertIn("Nombre original del registro: Linen Clothing", engine.context)
-            self.assertIn("Nombre traducido y aprobado: Ropa de lino", engine.context)
+            self.assertNotIn("Nombre traducido y aprobado", engine.context)
+
+
+    def test_masking_engine_never_fragments_text_after_marker_failure(self):
+        class BrokenMarkerEngine(Engine):
+            name = "broken-marker-test"
+            max_batch = 1
+
+            def translate_batch(self, texts, src, tgt):
+                return ["marcador alterado"]
+
+            def retry_masked(self, text, src, tgt):
+                return "marcador alterado"
+
+        with tempfile.TemporaryDirectory() as directory:
+            memory = self.memory(directory)
+            source = "A vest made of leather\\nhardened with glue."
+            logs = []
+            translate_pending(
+                [SimpleNamespace(text=source)], memory, BrokenMarkerEngine(),
+                "en", "es", log=logs.append, protected_terms=[],
+            )
+            self.assertNotIn(source, memory)
+            self.assertNotIn("A vest made of leather", memory)
+            self.assertNotIn("hardened with glue.", memory)
+            self.assertTrue(any("sin fragmentarlo" in line for line in logs))
 
     def test_existing_memory_is_reused_without_semantic_glossary_gate(self):
         with tempfile.TemporaryDirectory() as directory:
