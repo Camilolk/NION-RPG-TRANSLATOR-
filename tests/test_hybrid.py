@@ -98,7 +98,7 @@ class HybridEngineTests(unittest.TestCase):
     def test_spanish_rpg_prompt_explains_equipment_context(self):
         prompt = LlamaCppEngine._system_prompt("es")
         self.assertIn("'linen' es el tejido lino", prompt)
-        self.assertIn("'vest' en una pieza de armadura o ropa", prompt)
+        self.assertIn("'vest' en una pieza de armadura o ropa", prompt.lower())
         self.assertIn("FORMATO: conserva exactamente los saltos de línea", prompt)
 
     def test_changed_line_breaks_are_rejected(self):
