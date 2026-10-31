@@ -51,6 +51,17 @@
     "helmets": "cascos",
     "helmet": "casco",
     "bandana": "bandana",
-    "glue": "pegamento"
+    "glue": "pegamento",
+    "iron steel": "acero"
+  },
+  "term_variants": {
+    "breathability": [
+      "ventilación",
+      "buena ventilación"
+    ],
+    "old shield": [
+      "escudo viejo",
+      "escudo desgastado"
+    ]
   }
 }
