@@ -75,7 +75,7 @@ class Tests(unittest.TestCase):
 
 
     def test_code_only_mask_keeps_proper_names_visible(self):
-        original = r"\C[22]Elio: We need to find Shiori before sunset. \\V[1]"
+        original = r"\C[22]Elio: We need to find Shiori before sunset. \V[1]"
         masked, tokens = mask(original, protected_terms=())
         self.assertEqual(tokens, [r"\C[22]", r"\V[1]"])
         self.assertIn("Elio", masked)
