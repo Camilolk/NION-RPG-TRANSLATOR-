@@ -113,7 +113,22 @@ class LlamaCppEngine(Engine):
                 "modalidad del original. No conviertas primera, segunda o tercera "
                 "persona en otra. Evita falsos amigos y expresiones calcadas del inglés. "
                 "Si el texto es un fragmento de diálogo, conserva su sentido y sus "
-                "puntos suspensivos; no inventes un sujeto ni información que no aparezca."
+                "puntos suspensivos; no inventes un sujeto ni información que no aparezca. "
+                "CONTEXTO DE RPG: cuando traduzcas inventario, armas, armaduras, ropa, "
+                "materiales o descripciones de objetos, interpreta cada palabra como parte "
+                "de ese contexto y no como conversación cotidiana. 'Vest' en una pieza de "
+                "armadura o ropa es una prenda (por ejemplo, un chaleco), no el verbo "
+                "'vestir' ni un vestido. 'Clothing' se refiere a prendas o ropa; 'linen' "
+                "es el tejido lino, no ropa de cama. 'Leather' es cuero o piel curtida; "
+                "'hard leather' describe cuero endurecido, no comodidad ni muebles. "
+                "'Shield' en inventario es un escudo defensivo. Elige el sentido que encaje "
+                "con el objeto y su descripción; no sustituyas el objeto por otro. "
+                "En descripciones, conserva todos los datos, materiales, propiedades y "
+                "relaciones del original sin añadir explicaciones. "
+                "FORMATO: conserva exactamente los saltos de línea, líneas en blanco, "
+                "signos, corchetes y estructura del texto de entrada. Traduce el contenido "
+                "de etiquetas descriptivas entre corchetes, pero conserva los corchetes. "
+                "No unas líneas ni dividas una línea en varias."
             )
         if strict:
             prompt += (
