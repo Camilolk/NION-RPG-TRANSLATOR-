@@ -89,8 +89,8 @@ def _chunks(seq, size):
         yield seq[i:i + size]
 
 
-def _record_contexts(entries, memory, protected_terms, glossary, src, tgt):
-    """Relaciona descripciones de bases RPG Maker con el nombre de su registro."""
+def _record_contexts(entries):
+    """Relaciona descripciones RPG Maker con el nombre de su registro."""
     supported = {"Armors", "Items", "Weapons", "Skills"}
     names = {}
     for entry in entries:
@@ -107,28 +107,35 @@ def _record_contexts(entries, memory, protected_terms, glossary, src, tgt):
     }
     for entry in entries:
         stem = entry.file[:-5] if entry.file.endswith(".json") else entry.file
-        if (stem not in supported or len(entry.path) != 2
-                or entry.path[1] != "description"):
-            continue
-        source_name = names.get((entry.file, entry.path[0]))
-        if not source_name:
-            continue
-        translated_name = render(
-            source_name, memory, protected_terms, glossary, src, tgt
-        )
-        details = [
-            "Tipo de registro: %s." % labels[stem],
-            "Nombre original del registro: %s." % source_name,
-        ]
-        if translated_name:
-            details.append("Nombre traducido y aprobado: %s." % translated_name)
-        details.append(
-            "La descripción pertenece a este registro. Usa el nombre para "
-            "interpretar términos ambiguos y mantener la terminología; no "
-            "insertes el nombre ni información nueva en la traducción."
-        )
-        contexts.setdefault(entry.text, " ".join(details))
+        if (stem in supported and len(entry.path) == 2
+                and entry.path[1] == "description"):
+            source_name = names.get((entry.file, entry.path[0]))
+            if source_name:
+                contexts.setdefault(
+                    entry.text, (labels[stem], source_name)
+                )
     return contexts
+
+
+def _format_record_context(record, memory, protected_terms, glossary, src, tgt):
+    if not record:
+        return None
+    label, source_name = record
+    translated_name = render(
+        source_name, memory, protected_terms, glossary, src, tgt
+    )
+    details = [
+        "Tipo de registro: %s." % label,
+        "Nombre original del registro: %s." % source_name,
+    ]
+    if translated_name:
+        details.append("Nombre traducido y aprobado: %s." % translated_name)
+    details.append(
+        "La descripción pertenece a este registro. Usa el nombre para "
+        "interpretar términos ambiguos y mantener la terminología; no "
+        "insertes el nombre ni información nueva en la traducción."
+    )
+    return " ".join(details)
 
 
 def _translate_one(engine, text, src, tgt, context=None):
@@ -163,9 +170,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
     pending = pending_texts(entries, memory, protected_terms, glossary, src, tgt)
-    contexts = _record_contexts(
-        entries, memory, protected_terms, glossary, src, tgt
-    )
+    contexts = _record_contexts(entries)
     log("Textos por traducir: %d (%d caracteres)" %
         (len(pending), sum(map(len, pending))))
     leftovers = []
@@ -179,7 +184,10 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 for text in chunk
             ]
             for original, (masked, tokens) in zip(chunk, plan):
-                context = contexts.get(original)
+                context = _format_record_context(
+                    contexts.get(original), memory, protected_terms,
+                    glossary, src, tgt,
+                )
                 translated = _translate_one(engine, masked, src, tgt, context)
                 restored = unmask(translated, tokens, engine.placeholder)
                 prepared = normalize_names(original, glossary)
