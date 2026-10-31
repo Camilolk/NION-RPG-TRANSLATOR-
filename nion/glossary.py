@@ -48,7 +48,7 @@ def _alias_pattern(glossary):
         return None
     variants = sorted(aliases, key=len, reverse=True)
     return re.compile(
-        r"(?<!\\w)(?:" + "|".join(re.escape(item) for item in variants) + r")(?!\\w)",
+        r"(?<!\w)(?:" + "|".join(re.escape(item) for item in variants) + r")(?!\w)",
         re.IGNORECASE,
     )
 
