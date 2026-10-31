@@ -11,6 +11,7 @@ CODE_RE = re.compile("|".join([
 ]))
 
 _LETTER = re.compile(r"[^\W\d_]", re.UNICODE)
+_NEWLINE_RE = re.compile(r"\r\n|\n|\r")
 _PLACEHOLDER_RE = re.compile(r"\[\[NION_TOKEN_(\d+)\]\]")
 
 
@@ -42,17 +43,24 @@ def split_parts(text, protected_terms=()):
     while pos < len(text):
         code_match = CODE_RE.search(text, pos)
         name_match = names_re.search(text, pos) if names_re else None
-        matches = [m for m in (code_match, name_match) if m is not None]
+        newline_match = _NEWLINE_RE.search(text, pos)
+        matches = [m for m in (code_match, name_match, newline_match) if m is not None]
         if not matches:
             parts.append((False, text[pos:]))
             break
-        match = min(matches, key=lambda m: (m.start(), 0 if m.re is CODE_RE else 1))
+        match = min(
+            matches,
+            key=lambda m: (
+                m.start(),
+                0 if m is code_match else 1 if m is name_match else 2,
+            ),
+        )
         if match.start() > pos:
             parts.append((False, text[pos:match.start()]))
         token = match.group(0)
         end = match.end()
         # Preserve the speaker delimiter in dialogue labels such as "Elio:".
-        if match.re is not CODE_RE and end < len(text) and text[end] == ":":
+        if match is name_match and end < len(text) and text[end] == ":":
             token += ":"
             end += 1
         parts.append((True, token))
@@ -92,7 +100,8 @@ def names_preserved(original, translated, protected_terms=()):
     source_names = [
         chunk.rstrip(":")
         for is_token, chunk in split_parts(original, protected_terms)
-        if is_token and not CODE_RE.fullmatch(chunk)
+        if (is_token and not CODE_RE.fullmatch(chunk)
+                and not _NEWLINE_RE.fullmatch(chunk))
     ]
     output = translated.casefold()
     for name in source_names:

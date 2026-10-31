@@ -39,7 +39,7 @@ class SafetyTests(unittest.TestCase):
     def tearDown(self):
         self.temp.cleanup()
 
-    def test_masked_translation_retries_before_segment_fallback(self):
+    def test_masked_translation_retries_before_rejecting_unrecoverable_text(self):
         game = os.path.join(self.root, "game")
         make_game(game)
         _, entries = scan(game)
