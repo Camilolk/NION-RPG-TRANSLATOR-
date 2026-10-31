@@ -256,7 +256,7 @@ class Tests(unittest.TestCase):
         self.assertIn("\\C[0]", line)
         self.assertIn("\\N[1]", line)
 
-    def test_fallback_when_engine_loses_placeholders(self):
+    def test_engine_losing_placeholders_does_not_save_fragmented_translation(self):
         root = os.path.join(self.root, "g")
         make_game(root)
         mem = Memory(os.path.join(self.root, "m.json"))
@@ -264,11 +264,10 @@ class Tests(unittest.TestCase):
         translate_pending(entries, mem, LossyEngine(), "en", "es", log=lambda *_: None,
                           protected_terms=protected_names(root + "/data"))
         out = os.path.join(self.root, "out")
-        apply_translations(root, out, mem, log=lambda *_: None)
-        line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
-        self.assertTrue(line.startswith("\\C[2]Grant "), line)
-        self.assertIn("Grant X:says hello", line)
-        self.assertIn("\\N[1]", line)
+        applied, missing = apply_translations(root, out, mem, log=lambda *_: None)
+        self.assertEqual(applied, 0)
+        self.assertTrue(missing)
+        self.assertFalse(os.path.exists(out))
 
     def test_resume_after_failure(self):
         root = os.path.join(self.root, "g")
