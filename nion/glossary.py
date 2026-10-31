@@ -32,7 +32,19 @@ def load_glossary(path=None):
             if previous is not None and previous != canonical:
                 raise ValueError("La variante %r apunta a dos nombres oficiales." % variant)
             aliases[key] = canonical
-    return {"names": names, "aliases": aliases, "canonical": canonical_names}
+    terms = data.get("terms", {})
+    if not isinstance(terms, dict) or any(
+        not isinstance(source, str) or not source.strip()
+        or not isinstance(target, str) or not target.strip()
+        for source, target in terms.items()
+    ):
+        raise ValueError("El glosario 'terms' debe ser un objeto de términos y traducciones no vacíos.")
+    return {
+        "names": names,
+        "aliases": aliases,
+        "canonical": canonical_names,
+        "terms": terms,
+    }
 
 
 def glossary_terms(glossary):
