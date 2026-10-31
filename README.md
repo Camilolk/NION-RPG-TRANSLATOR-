@@ -37,10 +37,14 @@ La memoria y las copias de juegos son datos locales; no deben subirse a GitHub.
 ## Pruebas
     python -m unittest discover -s tests -v
 
-## Protección de códigos y nombres propios
+## Códigos RPG Maker y glosario de nombres
 El núcleo protege códigos como \\C[2], \\V[1], \\N[1], \\I[64], %1 y etiquetas compatibles. Los marcadores deben regresar una sola vez y en el mismo orden; si el motor los altera, NION recurre a traducir segmentos sin tocar los tokens.
 
-Los nombres de actores de Actors.json, los nombres de hablantes de eventos y los nombres de eventos detectados se excluyen de la traducción y se protegen también cuando aparecen dentro de diálogos. Esta es una protección automática conservadora; aún falta una interfaz de glosario para que el usuario autorice excepciones explícitas.
+El archivo editable `nion/glossary.json` contiene nombres oficiales y variantes conocidas. Por ejemplo, normaliza `Грант` a `Grant` y `Элио` a `Elio`, conservando los códigos de formato que los rodean. La lista inicial incluye Elio, Shiori, Erika, Grant, Tama, Kael y Ryou; revisa las equivalencias antes de traducir otro juego.
+
+Los nombres de actores de `Actors.json` se normalizan en la copia exportada. Los nombres visibles de hablantes (comando 101) se extraen como texto: si coinciden con el glosario se conservan/normalizan; si son descripciones como `Охранник`, pasan al motor para traducirse. Los nombres internos de eventos, como `EV002` o `GrantHouse`, no se extraen ni se protegen como nombres de personajes.
+
+Puedes usar un glosario distinto con `--glossary RUTA.json` en `scan`, `translate` y `apply`. El glosario predeterminado está en `nion/glossary.json`.
 
 Los motores deben devolver exactamente un resultado de texto por entrada; una respuesta incompleta se trata como error.
 
