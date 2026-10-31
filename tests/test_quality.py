@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from nion.engine import Engine
 from nion.memory import Memory
 from nion.pipeline import translate_pending
-from nion.quality import quality_issue, verified_correction
+from nion.quality import quality_issue, terminology_issues, verified_correction
+from nion.glossary import load_glossary
 
 
 class QualityTests(unittest.TestCase):
@@ -55,7 +56,7 @@ class QualityTests(unittest.TestCase):
                          (text, None))
 
 
-    def test_pipeline_retries_then_applies_verified_correction(self):
+    def test_pipeline_applies_verified_correction_without_retry(self):
         class BadEngine(Engine):
             name = "bad-test"
             max_batch = 1
@@ -77,9 +78,130 @@ class QualityTests(unittest.TestCase):
             logs = []
             translate_pending([entry], memory, engine, "en", "es",
                               log=logs.append, protected_terms=[])
-            self.assertEqual(engine.retry_calls, 1)
+            self.assertEqual(engine.retry_calls, 0)
             self.assertEqual(memory["We should hurry."], "Deberíamos darnos prisa.")
             self.assertTrue(any("corrección verificada" in line for line in logs))
+
+    def test_detects_wrong_rpg_object_and_material(self):
+        glossary = load_glossary()
+        self.assertTrue(quality_issue("Bronze Shield", "Escudo de plata", "en", "es", glossary))
+        self.assertIsNone(quality_issue("Bronze Shield", "Escudo de bronce", "en", "es", glossary))
+        self.assertTrue(quality_issue("Hard Leather", "Cuerda dura", "en", "es", glossary))
+        self.assertTrue(quality_issue("Helmets", "Cabezas", "en", "es", glossary))
+
+    def test_pipeline_rejects_rpg_term_after_failed_retry(self):
+        class WrongTermEngine(Engine):
+            name = "wrong-term-test"
+            max_batch = 1
+
+            def translate_batch(self, texts, src, tgt):
+                return ["Escudo de plata"]
+
+            def retry_masked(self, text, src, tgt):
+                return "Escudo de plata"
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = WrongTermEngine()
+            memory = Memory(os.path.join(directory, "memory.json"))
+            entry = SimpleNamespace(text="Bronze Shield")
+            logs = []
+            translate_pending([entry], memory, engine, "en", "es",
+                              log=logs.append, protected_terms=[])
+            self.assertNotIn("Bronze Shield", memory)
+            self.assertTrue(any("término RPG no conservado" in line for line in logs))
+
+    def test_pipeline_applies_verified_description_correction_without_retry(self):
+        class AwkwardEngine(Engine):
+            name = "awkward-description-test"
+            max_batch = 1
+
+            def __init__(self):
+                self.retry_calls = 0
+
+            def translate_batch(self, texts, src, tgt):
+                return ["A vestido hecho de cuero curtido."]
+
+            def retry_masked(self, text, src, tgt):
+                self.retry_calls += 1
+                return "A vestido hecho de cuero curtido."
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = AwkwardEngine()
+            memory = Memory(os.path.join(directory, "memory.json"))
+            entry = SimpleNamespace(text="A vest made of tanned hide.")
+            logs = []
+            translate_pending([entry], memory, engine, "en", "es",
+                              log=logs.append, protected_terms=[])
+            self.assertEqual(engine.retry_calls, 0)
+            self.assertEqual(
+                memory["A vest made of tanned hide."],
+                "Un chaleco hecho de cuero curtido.",
+            )
+            self.assertTrue(any("corrección verificada" in line for line in logs))
+
+    def test_accepts_contextual_rpg_term_variants(self):
+        glossary = load_glossary()
+        self.assertIsNone(quality_issue(
+            "A large, old shield that survived time.",
+            "Un escudo grande y viejo que ha resistido el paso del tiempo.",
+            "en", "es", glossary,
+        ))
+        self.assertIsNone(quality_issue(
+            "Linen clothing with high breathability.",
+            "Ropa de lino con buena ventilación.",
+            "en", "es", glossary,
+        ))
+
+    def test_compound_material_overrides_component_term(self):
+        glossary = load_glossary()
+        self.assertIsNone(quality_issue(
+            "A large shield made of iron steel.",
+            "Un escudo grande hecho de acero.",
+            "en", "es", glossary,
+        ))
+
+    def test_verified_rpg_descriptions_correct_known_grammar_and_material(self):
+        cases = {
+            "[General Equipment] Linen clothing with high\nbreathability.": (
+                "[Equipamiento general] Ropa de lino con alta transpirabilidad."
+            ),
+            "A large, old shield that survived time. Has something inscribed but it has mostly faded away.": (
+                "Un escudo grande y viejo que ha resistido el paso del tiempo. "
+                "Tiene algo grabado, pero casi se ha borrado."
+            ),
+            "A vest made of tanned hide.": "Un chaleco hecho de cuero curtido.",
+            "[General Equipment] A vest made of tanned hide.": (
+                "[Equipamiento general] Un chaleco hecho de cuero curtido."
+            ),
+            "A vest made of leather hardened with glue.": (
+                "Un chaleco de cuero endurecido con pegamento."
+            ),
+            "[General Equipment] A vest made of leather\nhardened with glue.": (
+                "[Equipamiento general] Un chaleco de cuero endurecido con pegamento."
+            ),
+            "[Large Shield] A large shield made of iron steel.": (
+                "[Escudo grande] Un escudo grande hecho de acero."
+            ),
+        }
+        for source, expected in cases.items():
+            with self.subTest(source=source):
+                corrected, reason = verified_correction(
+                    source, "Traducción defectuosa", "en", "es"
+                )
+                self.assertEqual(corrected, expected)
+                self.assertTrue(reason)
+
+        glossary = load_glossary()
+        old_shield_source = (
+            "A large, old shield that survived time.\n"
+            "Has something inscribed but it has mostly faded away."
+        )
+        old_shield_translation = cases[
+            "A large, old shield that survived time. Has something inscribed but it has mostly faded away."
+        ]
+        self.assertIsNone(quality_issue(
+            old_shield_source, old_shield_translation, "en", "es", glossary
+        ))
 
     def test_normalizes_case_spacing_and_final_punctuation(self):
         corrected, reason = verified_correction(
@@ -87,6 +209,32 @@ class QualityTests(unittest.TestCase):
         )
         self.assertEqual(corrected, "Deberíamos darnos prisa.")
         self.assertTrue(reason)
+
+
+
+    def test_rejects_semantic_drift_found_in_100_text_sample(self):
+        glossary = load_glossary()
+        cases = [
+            ("Mushroom Monster", "Monstero de hongo", "monstruo de los hongos"),
+            ("The inn should be open.", "La alberca debería estar abierta.", "posada"),
+            ("The tents are occupied.", "Los tendones están ocupados.", "tiendas de campaña"),
+            ("Thunder spells", "Hechizos de choque", "hechizos de trueno"),
+            ("Trial", "Tráiler", "prueba"),
+            ("Ice II", "II de Hielo", "hielo II"),
+            ("%1 hid.", "%1 se hidró.", "se escondió"),
+            ("Provoke", "¡Aprocha!", "provocar"),
+            ("[Sword] A sword forged from the fangs of a dragon.",
+             "[cuchillo] Un cuchillo forjado con las garras de un dragón.",
+             "[Espada] Una espada forjada con los colmillos de un dragón."),
+        ]
+        for source, bad_translation, expected in cases:
+            with self.subTest(source=source):
+                self.assertTrue(
+                    quality_issue(source, bad_translation, "en", "es", glossary)
+                )
+                self.assertIsNone(
+                    quality_issue(source, expected, "en", "es", glossary)
+                )
 
 
 if __name__ == "__main__":

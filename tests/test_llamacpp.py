@@ -60,6 +60,19 @@ class LlamaCppTests(unittest.TestCase):
         self.assertEqual(payload["messages"][1]["content"], "We should hurry.")
 
     @patch("nion.engine.urllib.request.urlopen")
+    def test_rpg_terminology_is_injected_into_spanish_prompt(self, mocked):
+        mocked.return_value = FakeResponse({"choices": [{"message": {"content": "Armaduras"}}]})
+        engine = LlamaCppEngine()
+        engine.set_terminology({"Armors": "Armaduras", "Bronze Shield": "Escudo de bronce"})
+        engine.translate_batch(["Armors"], "en", "es")
+        request = mocked.call_args.args[0]
+        payload = json.loads(request.data.decode("utf-8"))
+        prompt = payload["messages"][0]["content"]
+        self.assertIn("TERMINOLOGÍA RPG OBLIGATORIA", prompt)
+        self.assertIn("Armors → Armaduras", prompt)
+        self.assertIn("Bronze Shield → Escudo de bronce", prompt)
+
+    @patch("nion.engine.urllib.request.urlopen")
     def test_other_languages_do_not_receive_spanish_specific_rules(self, mocked):
         mocked.return_value = FakeResponse({"choices": [{"message": {"content": "Nous devons nous dépêcher."}}]})
         LlamaCppEngine().translate_batch(["We should hurry."], "en", "fr")
@@ -82,6 +95,17 @@ class LlamaCppTests(unittest.TestCase):
         mocked.return_value = FakeResponse({"unexpected": []})
         with self.assertRaises(EngineError):
             LlamaCppEngine().translate_batch(["Hello"], "en", "es")
+
+    def test_prompt_includes_accepted_terminology_variants(self):
+        engine = LlamaCppEngine()
+        engine.set_terminology(
+            {"old shield": "escudo antiguo"},
+            {"old shield": ["escudo viejo"]},
+        )
+        prompt = engine._system_prompt("es", terminology=engine.terminology,
+                                       terminology_variants=engine.terminology_variants)
+        self.assertIn("escudo antiguo", prompt)
+        self.assertIn("escudo viejo", prompt)
 
     def test_engine_factory(self):
         self.assertEqual(get_engine("llamacpp").name, "llamacpp")

@@ -59,9 +59,12 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     """Guarda memoria por lote; códigos y nombres oficiales quedan fuera del motor."""
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
+    if hasattr(engine, "set_terminology"):
+        engine.set_terminology(glossary.get("terms", {}), glossary.get("term_variants", {}))
     pending = pending_texts(entries, memory, protected_terms, glossary)
     log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
     leftovers = []
+    rejected = []
 
     if engine.supports_masking:
         done = 0
@@ -76,25 +79,44 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 prepared = normalize_names(original, glossary)
                 if restored is not None and not names_preserved(prepared, restored, protected_terms):
                     restored = None
-                if restored is not None and quality_issue(original, restored, src, tgt):
-                    log("  control de calidad: traducción sospechosa; reintentando...")
-                    if hasattr(engine, "retry_masked"):
-                        retried = engine.retry_masked(masked, src, tgt)
-                        restored = unmask(retried, tokens, engine.placeholder)
-                        if restored is not None and not names_preserved(prepared, restored, protected_terms):
-                            restored = None
-                    if restored is not None:
-                        corrected, reason = verified_correction(original, restored, src, tgt)
-                        if reason:
-                            log("  control de calidad: se aplicó una corrección verificada.")
-                            restored = corrected
-                elif restored is None and hasattr(engine, "retry_masked"):
+                if restored is not None:
+                    # Las correcciones exactas verificadas se aplican incluso cuando
+                    # la terminología pasó: también corrigen gramática conocida.
+                    corrected, reason = verified_correction(original, restored, src, tgt)
+                    if reason:
+                        log("  control de calidad: se aplicó una corrección verificada.")
+                        restored = corrected
+                    issue = quality_issue(original, restored, src, tgt, glossary)
+                    if issue:
+                        log("  control de calidad: %s; reintentando..." % issue)
+                        if hasattr(engine, "retry_masked"):
+                            retried = engine.retry_masked(masked, src, tgt)
+                            restored = unmask(retried, tokens, engine.placeholder)
+                            if restored is not None and not names_preserved(
+                                prepared, restored, protected_terms
+                            ):
+                                restored = None
+                        if restored is not None:
+                            corrected, reason = verified_correction(original, restored, src, tgt)
+                            if reason:
+                                log("  control de calidad: se aplicó una corrección verificada.")
+                                restored = corrected
+                            if quality_issue(original, restored, src, tgt, glossary):
+                                rejected.append(original)
+                                restored = None
+                elif hasattr(engine, "retry_masked"):
                     retried = engine.retry_masked(masked, src, tgt)
                     restored = unmask(retried, tokens, engine.placeholder)
                     if restored is not None and not names_preserved(prepared, restored, protected_terms):
                         restored = None
+                    if restored is not None and quality_issue(
+                        original, restored, src, tgt, glossary
+                    ):
+                        rejected.append(original)
+                        restored = None
                 if restored is None:
-                    leftovers.append(original)
+                    if original not in rejected:
+                        leftovers.append(original)
                 else:
                     memory.set(original, restored)
             memory.save()
@@ -123,6 +145,8 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
             composed = compose_from_segments(prepared_texts[text], memory, ())
             if composed is not None:
                 memory.set(text, composed)
+    if rejected:
+        log("  rechazados por control de calidad: %d (no se guardaron en memoria)" % len(rejected))
     memory.save()
 
 

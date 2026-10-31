@@ -1,13 +1,78 @@
 {
   "version": 1,
-  "description": "Nombres oficiales y variantes que deben normalizarse antes de traducir. Añade aquí solo nombres propios confirmados.",
+  "description": "Nombres propios confirmados y terminología de RPG para traducción inglés-español.",
   "names": {
-    "Elio": ["Элио"],
-    "Shiori": ["Шиори"],
-    "Erika": ["Эрика"],
-    "Grant": ["Грант"],
-    "Tama": ["Тама"],
-    "Kael": ["Кэйл"],
-    "Ryou": ["Рё"]
+    "Elio": [
+      "Элио"
+    ],
+    "Shiori": [
+      "Шиори"
+    ],
+    "Erika": [
+      "Эрика"
+    ],
+    "Grant": [
+      "Грант"
+    ],
+    "Tama": [
+      "Тама"
+    ],
+    "Kael": [
+      "Кэйл"
+    ],
+    "Ryou": [
+      "Рё"
+    ]
+  },
+  "terms": {
+    "armors": "armaduras",
+    "armor": "armadura",
+    "linen clothing": "ropa de lino",
+    "linen": "lino",
+    "breathability": "transpirabilidad",
+    "general equipment": "equipamiento general",
+    "leather vest": "chaleco de cuero",
+    "tanned hide": "cuero curtido",
+    "hard leather": "cuero endurecido",
+    "leather": "cuero",
+    "shields": "escudos",
+    "large shield": "escudo grande",
+    "old shield": "escudo antiguo",
+    "bronze shield": "escudo de bronce",
+    "bronze plates": "placas de bronce",
+    "bronze": "bronce",
+    "iron shield": "escudo de hierro",
+    "iron": "hierro",
+    "mithril shield": "escudo de mithril",
+    "mithril": "mithril",
+    "dragon shield": "escudo de dragón",
+    "dragon scales": "escamas de dragón",
+    "dragon": "dragón",
+    "helmets": "cascos",
+    "helmet": "casco",
+    "bandana": "bandana",
+    "glue": "pegamento",
+    "iron steel": "acero",
+    "mushroom monster": "monstruo de los hongos",
+    "inn": "posada",
+    "tents": "tiendas de campaña",
+    "thunder spells": "hechizos de trueno",
+    "trial": "prueba",
+    "ice II": "hielo II",
+    "sword": "espada",
+    "fangs": "colmillos",
+    "hid": "se escondió",
+    "provoke": "provocar"
+  },
+  "term_variants": {
+    "breathability": [
+      "ventilación",
+      "buena ventilación"
+    ],
+    "old shield": [
+      "escudo viejo",
+      "viejo",
+      "escudo desgastado"
+    ]
   }
 }

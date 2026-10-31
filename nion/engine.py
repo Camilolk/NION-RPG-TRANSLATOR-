@@ -76,6 +76,8 @@ class LlamaCppEngine(Engine):
     def __init__(self, url="http://127.0.0.1:8080", timeout=180):
         if not url or not url.strip():
             raise EngineError("La URL de llama.cpp está vacía.")
+        self.terminology = {}
+        self.terminology_variants = {}
         base = url.strip().rstrip("/")
         if base.endswith("/chat/completions"):
             self.url = base
@@ -85,8 +87,25 @@ class LlamaCppEngine(Engine):
             self.url = base + "/v1/chat/completions"
         self.timeout = timeout
 
+    def set_terminology(self, terms, variants=None):
+        """Configura términos RPG y variantes aceptadas para inglés -> español."""
+        if not isinstance(terms, dict) or (variants is not None and not isinstance(variants, dict)):
+            raise EngineError("El glosario de términos debe ser un objeto.")
+        self.terminology = {
+            source.strip(): target.strip()
+            for source, target in terms.items()
+            if isinstance(source, str) and source.strip()
+            and isinstance(target, str) and target.strip()
+        }
+        self.terminology_variants = {
+            source: [value.strip() for value in values
+                     if isinstance(value, str) and value.strip()]
+            for source, values in (variants or {}).items()
+            if isinstance(source, str) and isinstance(values, list)
+        }
+
     @staticmethod
-    def _system_prompt(tgt, strict=False):
+    def _system_prompt(tgt, strict=False, terminology=None, terminology_variants=None):
         prompt = (
             "Traduce todo el texto al idioma solicitado con precisión y naturalidad. "
             "Conserva el significado, el tono y la intención del personaje. "
@@ -106,6 +125,21 @@ class LlamaCppEngine(Engine):
                 "Interpreta el sentido de la frase completa; no reutilices una "
                 "traducción fija para sujetos diferentes."
             )
+        if (language == "es" or language.startswith("es-")) and terminology:
+            variants = terminology_variants or {}
+            lines = []
+            for source, target in sorted(
+                terminology.items(), key=lambda item: (-len(item[0]), item[0].casefold())
+            ):
+                alternatives = variants.get(source, [])
+                suffix = " (también válido: %s)" % " / ".join(alternatives) if alternatives else ""
+                lines.append("- %s → %s%s" % (source, target, suffix))
+            prompt += (
+                " TERMINOLOGÍA RPG OBLIGATORIA: cuando aparezca uno de estos términos "
+                "en el texto original, usa su equivalente indicado. No confundas "
+                "materiales ni sustituyas objetos por otros. No fuerces un término "
+                "si la palabra original no aparece.\n" + "\n".join(lines)
+            )
         if strict:
             prompt += (
                 " MODO DE REINTENTO ESTRICTO: copia cada marcador [[NION_TOKEN_n]] "
@@ -124,7 +158,10 @@ class LlamaCppEngine(Engine):
             payload = {
                 "model": "local-model",
                 "messages": [
-                    {"role": "system", "content": self._system_prompt(tgt, strict=strict)},
+                    {"role": "system", "content": self._system_prompt(
+                        tgt, strict=strict, terminology=self.terminology,
+                        terminology_variants=self.terminology_variants
+                    )},
                     {"role": "user", "content": text}
                 ],
                 "temperature": 0.1,
