@@ -46,7 +46,7 @@ def quality_issue(source, translated, src, tgt, glossary=None):
 
 def _has_term(text, term):
     """Busca un término completo, sin confundirlo con partes de otras palabras."""
-    return re.search(r"(?<!\\w)" + re.escape(term) + r"(?!\\w)", text, re.IGNORECASE) is not None
+    return re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text, re.IGNORECASE) is not None
 
 
 def terminology_issues(source, translated, glossary, src, tgt):
