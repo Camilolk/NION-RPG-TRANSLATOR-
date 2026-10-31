@@ -1,9 +1,12 @@
-"""Orquestación: escanear -> traducir por lotes -> aplicar a una COPIA."""
+"""Orquestación segura: escanear -> traducir -> validar -> guardar -> aplicar a una COPIA."""
 import json
 import os
 import shutil
 
-from .codes import compose_from_segments, mask, names_preserved, needs_translation, text_segments, unmask
+from .codes import (
+    compose_from_segments, mask, names_preserved, needs_translation,
+    text_segments, unmask,
+)
 from .engine import EngineError
 from .extract import find_data_dir, iter_entries, load_json, protected_names
 from .glossary import load_glossary, normalize_names
@@ -15,26 +18,60 @@ def scan(game_path):
     return data_dir, list(iter_entries(data_dir))
 
 
+def _approve_translation(source, translated, src, tgt, glossary, protected_terms):
+    """Aplica correcciones confirmadas y rechaza fallos verificables."""
+    if not isinstance(translated, str) or not translated.strip():
+        return None, "traducción vacía o inválida"
+
+    prepared = normalize_names(source, glossary)
+    if not names_preserved(prepared, translated, protected_terms):
+        return None, "se perdió o alteró un nombre protegido"
+
+    corrected, reason = verified_correction(source, translated, src, tgt)
+    if reason:
+        translated = corrected
+
+    issue = quality_issue(source, translated, src, tgt, glossary)
+    if issue:
+        return None, issue
+    return translated, None
+
+
 def render(text, memory, protected_terms=(), glossary=None):
+    """Devuelve solo traducciones utilizables; ignora memoria con fallos detectables."""
     glossary = glossary or load_glossary()
     prepared = normalize_names(text, glossary)
-    if text in memory:
-        return normalize_names(memory[text], glossary)
-    if prepared in memory:
-        return normalize_names(memory[prepared], glossary)
-    return compose_from_segments(prepared, memory, protected_terms)
+
+    for key in (text, prepared):
+        if key in memory:
+            translated, issue = _approve_translation(
+                prepared, normalize_names(memory[key], glossary),
+                "en", "es", glossary, protected_terms,
+            )
+            if translated is not None:
+                return translated
+
+    composed = compose_from_segments(prepared, memory, protected_terms)
+    if composed is None:
+        return None
+    translated, issue = _approve_translation(
+        prepared, normalize_names(composed, glossary),
+        "en", "es", glossary, protected_terms,
+    )
+    return translated
 
 
 def pending_texts(entries, memory, protected_terms=(), glossary=None):
     glossary = glossary or load_glossary()
     seen, out = set(), []
     for entry in entries:
-        if entry.text not in seen:
-            seen.add(entry.text)
-            if needs_translation(entry.text) and render(
-                entry.text, memory, protected_terms, glossary
-            ) is None:
-                out.append(entry.text)
+        if entry.text in seen:
+            continue
+        seen.add(entry.text)
+        if needs_translation(entry.text) and render(
+            entry.text, memory, protected_terms, glossary
+        ) is None:
+            out.append(entry.text)
     return out
 
 
@@ -56,13 +93,17 @@ def _translate_exact(engine, texts, src, tgt):
 
 def translate_pending(entries, memory, engine, src, tgt, log=print,
                       protected_terms=(), glossary=None):
-    """Guarda memoria por lote; códigos y nombres oficiales quedan fuera del motor."""
+    """Traduce, valida y solo entonces guarda; los tokens y nombres quedan protegidos."""
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
     if hasattr(engine, "set_terminology"):
-        engine.set_terminology(glossary.get("terms", {}), glossary.get("term_variants", {}))
+        engine.set_terminology(
+            glossary.get("terms", {}), glossary.get("term_variants", {})
+        )
+
     pending = pending_texts(entries, memory, protected_terms, glossary)
-    log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
+    log("Textos por traducir: %d (%d caracteres)" %
+        (len(pending), sum(map(len, pending))))
     leftovers = []
     rejected = []
 
@@ -70,83 +111,101 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
         done = 0
         for chunk in _chunks(pending, engine.max_batch):
             plan = [
-                mask(normalize_names(text, glossary), engine.placeholder, ())
+                mask(normalize_names(text, glossary), engine.placeholder, protected_terms)
                 for text in chunk
             ]
-            outputs = _translate_exact(engine, [masked for masked, _ in plan], src, tgt)
+            outputs = _translate_exact(
+                engine, [masked for masked, _ in plan], src, tgt
+            )
+
             for original, (masked, tokens), translated in zip(chunk, plan, outputs):
                 restored = unmask(translated, tokens, engine.placeholder)
                 prepared = normalize_names(original, glossary)
-                if restored is not None and not names_preserved(prepared, restored, protected_terms):
-                    restored = None
-                if restored is not None:
-                    # Las correcciones exactas verificadas se aplican incluso cuando
-                    # la terminología pasó: también corrigen gramática conocida.
-                    corrected, reason = verified_correction(original, restored, src, tgt)
-                    if reason:
-                        log("  control de calidad: se aplicó una corrección verificada.")
-                        restored = corrected
-                    issue = quality_issue(original, restored, src, tgt, glossary)
-                    if issue:
-                        log("  control de calidad: %s; reintentando..." % issue)
-                        if hasattr(engine, "retry_masked"):
-                            retried = engine.retry_masked(masked, src, tgt)
-                            restored = unmask(retried, tokens, engine.placeholder)
-                            if restored is not None and not names_preserved(
-                                prepared, restored, protected_terms
-                            ):
-                                restored = None
-                        if restored is not None:
-                            corrected, reason = verified_correction(original, restored, src, tgt)
-                            if reason:
-                                log("  control de calidad: se aplicó una corrección verificada.")
-                                restored = corrected
-                            if quality_issue(original, restored, src, tgt, glossary):
-                                rejected.append(original)
-                                restored = None
-                elif hasattr(engine, "retry_masked"):
+
+                # Si el modelo dañó marcadores, un reintento puede recuperarlos.
+                if restored is None and hasattr(engine, "retry_masked"):
+                    log("  marcadores alterados; reintentando...")
                     retried = engine.retry_masked(masked, src, tgt)
                     restored = unmask(retried, tokens, engine.placeholder)
-                    if restored is not None and not names_preserved(prepared, restored, protected_terms):
-                        restored = None
-                    if restored is not None and quality_issue(
-                        original, restored, src, tgt, glossary
-                    ):
-                        rejected.append(original)
-                        restored = None
+
                 if restored is None:
-                    if original not in rejected:
-                        leftovers.append(original)
-                else:
-                    memory.set(original, restored)
+                    leftovers.append(original)
+                    continue
+
+                approved, issue = _approve_translation(
+                    prepared, restored, src, tgt, glossary, protected_terms
+                )
+                if issue:
+                    log("  control de calidad: %s; reintentando..." % issue)
+                    if hasattr(engine, "retry_masked"):
+                        retried = engine.retry_masked(masked, src, tgt)
+                        restored = unmask(retried, tokens, engine.placeholder)
+                        if restored is not None:
+                            approved, issue = _approve_translation(
+                                prepared, restored, src, tgt,
+                                glossary, protected_terms,
+                            )
+                    if issue:
+                        rejected.append(original)
+                        log("  rechazado; no se guardó en memoria: %s" % original)
+                        continue
+
+                memory.set(original, approved)
+
             memory.save()
             done += len(chunk)
-            log("  traducido %d / %d" % (done, len(pending)))
+            log("  procesado %d / %d" % (done, len(pending)))
     else:
+        # DeepL no usa marcadores propios: se traducen solo segmentos de texto,
+        # manteniendo códigos RPG Maker y nombres oficiales fuera de la petición.
         leftovers = list(pending)
 
     if leftovers:
-        log("Traducción por trozos para %d textos con tokens protegidos..." % len(leftovers))
+        log("Traducción segura por segmentos para %d textos..." % len(leftovers))
+        prepared_texts = {
+            text: normalize_names(text, glossary) for text in leftovers
+        }
         segments = []
-        prepared_texts = {text: normalize_names(text, glossary) for text in leftovers}
         for text in leftovers:
-            for _, core, _ in text_segments(prepared_texts[text], ()):
+            for _, core, _ in text_segments(prepared_texts[text], protected_terms):
                 if core not in memory and core not in segments:
                     segments.append(core)
+
         done = 0
         for chunk in _chunks(segments, engine.max_batch):
             outputs = _translate_exact(engine, chunk, src, tgt)
             for core, translated in zip(chunk, outputs):
-                memory.set(core, translated)
+                approved, issue = _approve_translation(
+                    core, translated, src, tgt, glossary, protected_terms
+                )
+                if issue:
+                    log("  segmento pendiente (%s): %s" % (issue, core))
+                    continue
+                memory.set(core, approved)
             memory.save()
             done += len(chunk)
-            log("  trozos %d / %d" % (done, len(segments)))
-        for text in leftovers:
-            composed = compose_from_segments(prepared_texts[text], memory, ())
-            if composed is not None:
-                memory.set(text, composed)
+            log("  segmentos procesados %d / %d" % (done, len(segments)))
+
+        for original in leftovers:
+            composed = compose_from_segments(
+                prepared_texts[original], memory, protected_terms
+            )
+            if composed is None:
+                rejected.append(original)
+                continue
+            approved, issue = _approve_translation(
+                prepared_texts[original], composed, src, tgt,
+                glossary, protected_terms,
+            )
+            if issue:
+                rejected.append(original)
+                log("  texto pendiente de revisión (%s): %s" % (issue, original))
+                continue
+            memory.set(original, approved)
+
     if rejected:
-        log("  rechazados por control de calidad: %d (no se guardaron en memoria)" % len(rejected))
+        log("  textos no aprobados: %d (no se guardaron como traducciones completas)" %
+            len(set(rejected)))
     memory.save()
 
 
@@ -189,9 +248,13 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
     protected_terms = protected_names(data_dir, glossary)
     data_abs, out_abs = os.path.abspath(data_dir), os.path.abspath(out_dir)
     if out_abs == data_abs or os.path.commonpath([data_abs, out_abs]) == data_abs:
-        raise EngineError("La salida no puede ser la carpeta original ni estar dentro de ella.")
+        raise EngineError(
+            "La salida no puede ser la carpeta original ni estar dentro de ella."
+        )
     if os.path.exists(out_abs):
-        raise EngineError("La carpeta de salida ya existe; elige otra para no mezclar archivos antiguos.")
+        raise EngineError(
+            "La carpeta de salida ya existe; elige otra para no mezclar archivos antiguos."
+        )
 
     by_file, missing = {}, {}
     for entry in iter_entries(data_dir):
@@ -201,7 +264,8 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
         ) is None:
             missing[entry.text] = 1
     if missing:
-        log("Exportación cancelada: faltan %d textos. No se creó ninguna copia." % len(missing))
+        log("Exportación cancelada: faltan %d textos. No se creó ninguna copia." %
+            len(missing))
         return 0, list(missing)
 
     parent = os.path.dirname(out_abs)
@@ -214,8 +278,10 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
         data = load_json(os.path.join(data_dir, filename))
         changed = False
         for entry in entries:
-            translated = (render(entry.text, memory, protected_terms, glossary)
-                          if needs_translation(entry.text) else None)
+            translated = (
+                render(entry.text, memory, protected_terms, glossary)
+                if needs_translation(entry.text) else None
+            )
             if translated is not None:
                 _set_path(data, entry.path, translated)
                 applied += 1
