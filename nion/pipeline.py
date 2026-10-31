@@ -103,6 +103,11 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                     restored = unmask(retried, tokens, engine.placeholder)
                     if restored is not None and not names_preserved(prepared, restored, protected_terms):
                         restored = None
+                    if restored is not None and quality_issue(
+                        original, restored, src, tgt, glossary
+                    ):
+                        rejected.append(original)
+                        restored = None
                 if restored is None:
                     if original not in rejected:
                         leftovers.append(original)
