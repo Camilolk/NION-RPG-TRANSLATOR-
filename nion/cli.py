@@ -5,6 +5,7 @@ import sys
 
 from .engine import EngineError, get_engine
 from .extract import protected_names
+from .glossary import load_glossary
 from .memory import Memory
 from .pipeline import apply_translations, pending_texts, scan, translate_pending
 
@@ -17,6 +18,7 @@ def main(argv=None):
         command.add_argument("game", help="carpeta del juego (o su carpeta data)")
         command.add_argument("--lang", default="es", help="idioma destino (es, pt-br, fr...)")
         command.add_argument("--memory", help="archivo de memoria (por defecto nion_memory_<lang>.json)")
+        command.add_argument("--glossary", help="JSON de nombres propios (por defecto nion/glossary.json)")
 
     scan_parser = sub.add_parser("scan", help="cuenta textos sin traducir ni gastar nada")
     common(scan_parser)
@@ -33,7 +35,8 @@ def main(argv=None):
     memory = Memory(args.memory or "nion_memory_%s.json" % args.lang.lower())
     try:
         data_dir, entries = scan(args.game)
-        names = protected_names(data_dir)
+        glossary = load_glossary(args.glossary)
+        names = protected_names(data_dir, glossary)
         if args.cmd == "scan":
             todo = pending_texts(entries, memory, names)
             print("Carpeta data:", data_dir)
@@ -42,11 +45,12 @@ def main(argv=None):
             print("Por traducir:", len(todo), "textos,", sum(map(len, todo)), "caracteres")
         elif args.cmd == "translate":
             engine = get_engine(args.engine, args.key)
-            translate_pending(entries, memory, engine, args.src, args.lang, protected_terms=names)
+            translate_pending(entries, memory, engine, args.src, args.lang,
+                              protected_terms=names, glossary=glossary)
             print("TERMINADO. Memoria:", memory.path)
         else:
             output = args.out or data_dir.rstrip("/\\") + "_" + args.lang.lower()
-            applied, missing = apply_translations(args.game, output, memory)
+            applied, missing = apply_translations(args.game, output, memory, glossary=glossary)
             if missing:
                 with open("faltan.txt", "w", encoding="utf-8") as fh:
                     fh.write("\n".join(missing))
