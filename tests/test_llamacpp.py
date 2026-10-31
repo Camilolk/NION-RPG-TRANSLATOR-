@@ -40,7 +40,7 @@ class LlamaCppTests(unittest.TestCase):
         LlamaCppEngine().translate_batch(["⟦0⟧Hello⟦1⟧"], "en", "es")
         request = mocked.call_args.args[0]
         payload = json.loads(request.data.decode("utf-8"))
-        self.assertIn("⟦n⟧", payload["messages"][0]["content"])
+        self.assertIn("[[NION_TOKEN_n]]", payload["messages"][0]["content"])
         self.assertIn("⟦0⟧Hello⟦1⟧", payload["messages"][1]["content"])
 
     @patch("nion.engine.urllib.request.urlopen")
@@ -53,7 +53,7 @@ class LlamaCppTests(unittest.TestCase):
         self.assertIn("español latinoamericano neutro", prompt)
         self.assertIn("concordancia de sujeto, verbo y pronombres", prompt)
         self.assertIn("Debemos apresurarnos", prompt)
-        self.assertIn("⟦n⟧", prompt)
+        self.assertIn("[[NION_TOKEN_n]]", prompt)
 
     @patch("nion.engine.urllib.request.urlopen")
     def test_other_languages_do_not_receive_spanish_specific_rules(self, mocked):
