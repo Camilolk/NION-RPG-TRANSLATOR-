@@ -5,7 +5,7 @@ import shutil
 
 from .codes import compose_from_segments, mask, needs_translation, text_segments, unmask
 from .engine import EngineError
-from .extract import find_data_dir, iter_entries, load_json
+from .extract import find_data_dir, iter_entries, load_json, protected_names
 
 
 def scan(game_path):
@@ -13,18 +13,18 @@ def scan(game_path):
     return data_dir, list(iter_entries(data_dir))
 
 
-def render(text, memory):
+def render(text, memory, protected_terms=()):
     if text in memory:
         return memory[text]
-    return compose_from_segments(text, memory)
+    return compose_from_segments(text, memory, protected_terms)
 
 
-def pending_texts(entries, memory):
+def pending_texts(entries, memory, protected_terms=()):
     seen, out = set(), []
     for entry in entries:
         if entry.text not in seen:
             seen.add(entry.text)
-            if needs_translation(entry.text) and render(entry.text, memory) is None:
+            if needs_translation(entry.text) and render(entry.text, memory, protected_terms) is None:
                 out.append(entry.text)
     return out
 
@@ -45,19 +45,19 @@ def _translate_exact(engine, texts, src, tgt):
     return outputs
 
 
-def translate_pending(entries, memory, engine, src, tgt, log=print):
-    """Guarda la memoria tras cada lote para permitir reanudar."""
-    pending = pending_texts(entries, memory)
+def translate_pending(entries, memory, engine, src, tgt, log=print, protected_terms=()):
+    """Guarda memoria por lote; códigos y nombres propios quedan fuera del motor."""
+    pending = pending_texts(entries, memory, protected_terms)
     log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
     leftovers = []
 
     if engine.supports_masking:
         done = 0
         for chunk in _chunks(pending, engine.max_batch):
-            plan = [mask(text, engine.placeholder) for text in chunk]
+            plan = [mask(text, engine.placeholder, protected_terms) for text in chunk]
             outputs = _translate_exact(engine, [masked for masked, _ in plan], src, tgt)
-            for original, (_, codes), translated in zip(chunk, plan, outputs):
-                restored = unmask(translated, codes, engine.placeholder)
+            for original, (_, tokens), translated in zip(chunk, plan, outputs):
+                restored = unmask(translated, tokens, engine.placeholder)
                 if restored is None:
                     leftovers.append(original)
                 else:
@@ -69,10 +69,10 @@ def translate_pending(entries, memory, engine, src, tgt, log=print):
         leftovers = list(pending)
 
     if leftovers:
-        log("Traducción por trozos para %d textos con códigos delicados..." % len(leftovers))
+        log("Traducción por trozos para %d textos con tokens protegidos..." % len(leftovers))
         segments = []
         for text in leftovers:
-            for _, core, _ in text_segments(text):
+            for _, core, _ in text_segments(text, protected_terms):
                 if core not in memory and core not in segments:
                     segments.append(core)
         done = 0
@@ -84,7 +84,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print):
             done += len(chunk)
             log("  trozos %d / %d" % (done, len(segments)))
         for text in leftovers:
-            composed = compose_from_segments(text, memory)
+            composed = compose_from_segments(text, memory, protected_terms)
             if composed is not None:
                 memory.set(text, composed)
     memory.save()
@@ -100,6 +100,7 @@ def _set_path(data, path, value):
 def apply_translations(game_path, out_dir, memory, log=print):
     """No crea una salida parcial: exige todas las traducciones antes de copiar."""
     data_dir = find_data_dir(game_path)
+    protected_terms = protected_names(data_dir)
     data_abs, out_abs = os.path.abspath(data_dir), os.path.abspath(out_dir)
     if out_abs == data_abs or os.path.commonpath([data_abs, out_abs]) == data_abs:
         raise EngineError("La salida no puede ser la carpeta original ni estar dentro de ella.")
@@ -109,7 +110,7 @@ def apply_translations(game_path, out_dir, memory, log=print):
     by_file, missing = {}, {}
     for entry in iter_entries(data_dir):
         by_file.setdefault(entry.file, []).append(entry)
-        if needs_translation(entry.text) and render(entry.text, memory) is None:
+        if needs_translation(entry.text) and render(entry.text, memory, protected_terms) is None:
             missing[entry.text] = 1
     if missing:
         log("Exportación cancelada: faltan %d textos. No se creó ninguna copia." % len(missing))
@@ -125,7 +126,8 @@ def apply_translations(game_path, out_dir, memory, log=print):
         data = load_json(os.path.join(data_dir, filename))
         changed = False
         for entry in entries:
-            translated = render(entry.text, memory) if needs_translation(entry.text) else None
+            translated = (render(entry.text, memory, protected_terms)
+                          if needs_translation(entry.text) else None)
             if translated is not None:
                 _set_path(data, entry.path, translated)
                 applied += 1
