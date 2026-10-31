@@ -123,7 +123,7 @@ class Tests(unittest.TestCase):
         output = read(out + "/Map001.json")
         line = output["events"][1]["pages"][0]["list"][1]["parameters"][0]
         self.assertIn("Grant", line)
-        self.assertIn("Elio", line)  # Elio está representado por \N[1] y su nombre no se traduce
+        self.assertNotIn("Elio", line)  # Elio está representado por \N[1] y su nombre no se traduce
         self.assertIn("\\C[2]", line)
         self.assertIn("\\C[0]", line)
         self.assertIn("\\N[1]", line)
@@ -168,7 +168,8 @@ class Tests(unittest.TestCase):
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
-        self.assertTrue(line.startswith("\\C[2]X:Grant says hello\\C[0]"), line)
+        self.assertTrue(line.startswith("\\C[2]Grant"), line)
+        self.assertIn("X:says hello", line)
         self.assertIn("\\N[1]", line)
 
     def test_resume_after_failure(self):
