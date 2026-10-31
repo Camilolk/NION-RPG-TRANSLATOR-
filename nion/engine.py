@@ -1,10 +1,13 @@
 """Motores de traducción intercambiables."""
 import json
+import logging
 import os
 import time
 import urllib.error
 import urllib.request
 from .codes import default_placeholder
+
+logger = logging.getLogger(__name__)
 
 
 class EngineError(Exception):
@@ -213,11 +216,29 @@ class LlamaCppEngine(Engine):
 
 
 class OpenRouterEngine(Engine):
-    """Motor remoto compatible con OpenAI; usa openrouter/free por defecto."""
+    """Motor OpenRouter con perfiles, diagnóstico seguro y recuperación por causa."""
     name = "openrouter"
     max_batch = 1
-    supports_masking = True
+    supports_masking = False
     supports_context = True
+
+    MODEL_PROFILES = {
+        "nvidia/nemotron-3.5-super-vl:free": {
+            "min_output_tokens": 512,
+            "max_output_tokens": 4096,
+            "reasoning": {"enabled": False},
+        },
+        "nvidia/nemotron-3.5-super-vl": {
+            "min_output_tokens": 512,
+            "max_output_tokens": 4096,
+            "reasoning": {"enabled": False},
+        },
+    }
+    DEFAULT_PROFILE = {
+        "min_output_tokens": 256,
+        "max_output_tokens": 1200,
+        "reasoning": None,
+    }
 
     def __init__(self, key=None, model=None, timeout=120):
         self.key = (key or os.environ.get("NION_OPENROUTER_KEY") or "").strip()
@@ -231,6 +252,8 @@ class OpenRouterEngine(Engine):
         )).strip()
         self.url = "https://openrouter.ai/api/v1/chat/completions"
         self.timeout = timeout
+        self.profile = dict(self.DEFAULT_PROFILE)
+        self.profile.update(self.MODEL_PROFILES.get(self.model, {}))
 
     def retry_masked_with_context(self, text, src, tgt, context):
         return self.translate_batch(
@@ -240,24 +263,160 @@ class OpenRouterEngine(Engine):
     def translate_with_context(self, text, src, tgt, context):
         return self.translate_batch([text], src, tgt, contexts=[context])[0]
 
-    def _request_content(self, req):
-        """Reintenta fallos transitorios y respuestas vacías sin perder el texto."""
+    def _safe_detail(self, value, limit=240):
+        """Evita que una respuesta del proveedor pueda repetir la clave."""
+        detail = str(value or "").replace(self.key, "[REDACTED]")
+        return detail[:limit]
+
+    @staticmethod
+    def _extract_message_text(message):
+        """Acepta texto plano y bloques multimodales que contengan texto."""
+        content = message.get("content")
+        if isinstance(content, str):
+            return content.strip(), "text", []
+        if isinstance(content, list):
+            text_parts, block_types = [], []
+            for block in content:
+                if not isinstance(block, dict):
+                    block_types.append(type(block).__name__)
+                    continue
+                block_type = str(block.get("type", "unknown"))
+                block_types.append(block_type)
+                if block_type == "text" and isinstance(block.get("text"), str):
+                    if block["text"].strip():
+                        text_parts.append(block["text"].strip())
+            return "\n".join(text_parts).strip(), "blocks", block_types
+        if content is None:
+            return "", "null", []
+        return "", type(content).__name__, []
+
+    @staticmethod
+    def _response_diagnostics(data):
+        """Extrae solo metadatos seguros; nunca guarda prompt ni razonamiento."""
+        choices = data.get("choices") if isinstance(data, dict) else None
+        choice = choices[0] if isinstance(choices, list) and choices else {}
+        message = choice.get("message") if isinstance(choice, dict) else {}
+        if not isinstance(message, dict):
+            message = {}
+        content, content_kind, block_types = OpenRouterEngine._extract_message_text(message)
+        reasoning = message.get("reasoning")
+        if reasoning is None:
+            reasoning = message.get("reasoning_details")
+        reasoning_present = reasoning is not None and reasoning != "" and reasoning != []
+        reasoning_chars = len(reasoning) if isinstance(reasoning, str) else (
+            sum(len(str(item)) for item in reasoning) if isinstance(reasoning, list) else 0
+        )
+        usage = data.get("usage") if isinstance(data, dict) else {}
+        usage = usage if isinstance(usage, dict) else {}
+        details = usage.get("completion_tokens_details")
+        details = details if isinstance(details, dict) else {}
+        return content, {
+            "finish_reason": choice.get("finish_reason"),
+            "content_kind": content_kind,
+            "content_chars": len(content),
+            "reasoning_present": reasoning_present,
+            "reasoning_chars": reasoning_chars,
+            "reasoning_tokens": details.get("reasoning_tokens"),
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+            "block_types": block_types,
+            "choice_count": len(choices) if isinstance(choices, list) else 0,
+        }
+
+    def _log_response(self, attempt, diagnostics, elapsed):
+        logger.info(
+            "OpenRouter response model=%s attempt=%d elapsed_ms=%d "
+            "finish_reason=%s content_kind=%s content_chars=%d "
+            "reasoning_present=%s reasoning_chars=%d reasoning_tokens=%s "
+            "prompt_tokens=%s completion_tokens=%s total_tokens=%s "
+            "block_types=%s",
+            self.model, attempt, int(elapsed * 1000),
+            diagnostics["finish_reason"], diagnostics["content_kind"],
+            diagnostics["content_chars"], diagnostics["reasoning_present"],
+            diagnostics["reasoning_chars"], diagnostics["reasoning_tokens"],
+            diagnostics["prompt_tokens"], diagnostics["completion_tokens"],
+            diagnostics["total_tokens"], diagnostics["block_types"],
+        )
+
+    def _make_request(self, payload):
+        return urllib.request.Request(
+            self.url,
+            data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            headers={
+                "Authorization": "Bearer " + self.key,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/Camilolk/NION-RPG-TRANSLATOR-",
+                "X-Title": "NION RPG Translator",
+            },
+            method="POST",
+        )
+
+    def _request_content(self, payload):
+        """Reintenta fallos HTTP y aumenta tokens solo ante truncamiento."""
         retryable_statuses = {429, 500, 502, 503, 504}
         delays = (2, 5)
+        attempt_payload = dict(payload)
+        empty_retries = 0
+
         for attempt in range(3):
+            started = time.monotonic()
             try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                with urllib.request.urlopen(
+                    self._make_request(attempt_payload), timeout=self.timeout
+                ) as response:
+                    status = getattr(response, "status", 200)
                     data = json.loads(response.read().decode("utf-8"))
-                result = data["choices"][0]["message"]["content"]
-                if isinstance(result, str) and result.strip():
-                    return result.strip()
-                if attempt < 2:
-                    time.sleep(delays[attempt])
+
+                content, diagnostics = self._response_diagnostics(data)
+                self._log_response(attempt + 1, diagnostics, time.monotonic() - started)
+                finish_reason = diagnostics["finish_reason"]
+
+                if finish_reason == "length":
+                    current = int(attempt_payload.get("max_tokens", 512))
+                    ceiling = int(self.profile["max_output_tokens"])
+                    if attempt < 2 and current < ceiling:
+                        attempt_payload["max_tokens"] = min(ceiling, current * 2)
+                        logger.warning(
+                            "OpenRouter truncó salida (length); se amplía max_tokens "
+                            "de %d a %d para modelo=%s",
+                            current, attempt_payload["max_tokens"], self.model,
+                        )
+                        continue
+                    raise EngineError(
+                        "OpenRouter agotó max_tokens (finish_reason=length); "
+                        "respuesta incompleta. Revisa el presupuesto del modelo."
+                    )
+
+                if content:
+                    return content
+
+                if empty_retries < 1 and attempt < 2:
+                    empty_retries += 1
+                    logger.warning(
+                        "OpenRouter devolvió contenido vacío; finish_reason=%s "
+                        "reasoning_present=%s reasoning_tokens=%s status=%s",
+                        finish_reason, diagnostics["reasoning_present"],
+                        diagnostics["reasoning_tokens"], status,
+                    )
+                    # Si el perfil permite razonamiento, el reintento reserva
+                    # presupuesto para la respuesta visible.
+                    if attempt_payload.get("reasoning") is not None:
+                        attempt_payload["reasoning"] = {"enabled": False}
                     continue
-                raise EngineError(
-                    "OpenRouter devolvió una respuesta vacía tras 3 intentos. "
-                    "El texto quedó pendiente y no se guardó."
+
+                reason = (
+                    "razonamiento sin contenido visible"
+                    if diagnostics["reasoning_present"]
+                    else "contenido vacío o nulo"
                 )
+                raise EngineError(
+                    "OpenRouter devolvió %s (finish_reason=%s, "
+                    "reasoning_tokens=%s, completion_tokens=%s)."
+                    % (reason, finish_reason, diagnostics["reasoning_tokens"],
+                       diagnostics["completion_tokens"])
+                )
+
             except urllib.error.HTTPError as error:
                 if error.code in retryable_statuses and attempt < 2:
                     retry_after = error.headers.get("Retry-After") if error.headers else None
@@ -265,32 +424,44 @@ class OpenRouterEngine(Engine):
                         delay = min(15, max(0, float(retry_after))) if retry_after else delays[attempt]
                     except (TypeError, ValueError):
                         delay = delays[attempt]
+                    logger.warning(
+                        "OpenRouter HTTP %d; reintento %d/3 en %ss",
+                        error.code, attempt + 1, delay,
+                    )
                     time.sleep(delay)
                     continue
                 try:
-                    detail = error.read().decode("utf-8", "replace")[:300]
+                    detail = self._safe_detail(error.read().decode("utf-8", "replace"))
                 except Exception:
-                    detail = str(error.reason)
+                    detail = self._safe_detail(error.reason)
                 if error.code == 429:
                     detail = "límite de solicitudes alcanzado. " + detail
+                logger.error("OpenRouter HTTP error status=%d detail=%s", error.code, detail)
                 raise EngineError("OpenRouter HTTP %d: %s" % (error.code, detail))
             except urllib.error.URLError as error:
                 if attempt < 2:
+                    logger.warning("OpenRouter conexión fallida; reintento %d/3", attempt + 1)
                     time.sleep(delays[attempt])
                     continue
                 raise EngineError(
-                    "No se pudo conectar con OpenRouter tras 3 intentos: %s" % error.reason
+                    "No se pudo conectar con OpenRouter tras 3 intentos: %s"
+                    % self._safe_detail(error.reason)
                 )
             except EngineError:
                 raise
             except (KeyError, IndexError, TypeError, ValueError) as error:
-                raise EngineError("Respuesta de OpenRouter no válida: %s" % error)
+                logger.exception("OpenRouter devolvió una estructura JSON no válida")
+                raise EngineError(
+                    "Respuesta de OpenRouter no válida: %s" % self._safe_detail(error)
+                )
         raise EngineError("OpenRouter no pudo completar la solicitud.")
 
     def translate_batch(self, texts, src, tgt, strict=False, contexts=None):
         outputs = []
         for index, text in enumerate(texts):
             system = LlamaCppEngine._system_prompt(tgt, strict=strict)
+            min_tokens = int(self.profile["min_output_tokens"])
+            max_tokens = int(self.profile["max_output_tokens"])
             payload = {
                 "model": self.model,
                 "messages": [
@@ -300,8 +471,10 @@ class OpenRouterEngine(Engine):
                      % (src, tgt, text)},
                 ],
                 "temperature": 0.15,
-                "max_tokens": min(1200, max(160, len(text) * 4)),
+                "max_tokens": min(max_tokens, max(min_tokens, len(text) * 4)),
             }
+            if self.profile.get("reasoning") is not None:
+                payload["reasoning"] = dict(self.profile["reasoning"])
             context = contexts[index] if contexts and index < len(contexts) else None
             if context:
                 payload["messages"][1]["content"] = (
@@ -309,19 +482,9 @@ class OpenRouterEngine(Engine):
                     "pero traduce únicamente el texto indicado):\n"
                     + context + "\n\n" + payload["messages"][1]["content"]
                 )
-            req = urllib.request.Request(
-                self.url,
-                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-                headers={
-                    "Authorization": "Bearer " + self.key,
-                    "Content-Type": "application/json",
-                    "HTTP-Referer": "https://github.com/Camilolk/NION-RPG-TRANSLATOR-",
-                    "X-Title": "NION RPG Translator",
-                },
-                method="POST",
-            )
-            outputs.append(self._request_content(req))
+            outputs.append(self._request_content(payload))
         return outputs
+
     def retry_masked(self, text, src, tgt):
         return self.translate_batch([text], src, tgt, strict=True)[0]
 
