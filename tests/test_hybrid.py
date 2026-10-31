@@ -107,7 +107,7 @@ class HybridEngineTests(unittest.TestCase):
             engine = OpenRouterEngine(key="test-secret", model="openrouter/free")
             engine.translate_with_context(
                 "Linen clothing.", "en", "es",
-                "Nombre original: Linen Clothing. Nombre traducido: Ropa de lino."
+                "Nombre original: Linen Clothing."
             )
             request = mocked.call_args.args[0]
             payload = json.loads(request.data.decode("utf-8"))
