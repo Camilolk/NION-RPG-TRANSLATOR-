@@ -225,7 +225,7 @@ class QualityTests(unittest.TestCase):
             ("Provoke", "¡Aprocha!", "provocar"),
             ("[Sword] A sword forged from the fangs of a dragon.",
              "[cuchillo] Un cuchillo forjado con las garras de un dragón.",
-             "espada"),
+             "[Espada] Una espada forjada con los colmillos de un dragón."),
         ]
         for source, bad_translation, expected in cases:
             with self.subTest(source=source):
