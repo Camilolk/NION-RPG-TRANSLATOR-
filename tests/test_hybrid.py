@@ -53,14 +53,16 @@ class HybridEngineTests(unittest.TestCase):
         )
 
     def test_unknown_text_uses_local_engine_when_no_cloud_key(self):
-        engine = HybridEngine(glossary={"terms": {}})
-        local = FakeEngine(["Una frase traducida"])
-        engine.local = local
-        self.assertEqual(
-            engine.translate_batch(["A complete sentence."], "en", "es"),
-            ["Una frase traducida"],
-        )
-        self.assertEqual(local.calls, [["A complete sentence."]])
+        with patch.dict("os.environ", {"NION_OPENROUTER_KEY": ""}):
+            engine = HybridEngine(glossary={"terms": {}})
+            local = FakeEngine(["Una frase traducida"])
+            engine.local = local
+            self.assertIsNone(engine.cloud)
+            self.assertEqual(
+                engine.translate_batch(["A complete sentence."], "en", "es"),
+                ["Una frase traducida"],
+            )
+            self.assertEqual(local.calls, [["A complete sentence."]])
 
     def test_cloud_failure_falls_back_to_local(self):
         engine = HybridEngine(glossary={"terms": {}})
