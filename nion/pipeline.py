@@ -17,10 +17,25 @@ def scan(game_path):
     return data_dir, list(iter_entries(data_dir))
 
 
+def _has_unexpected_script(text, tgt):
+    """Detecta contaminación CJK en destinos escritos con alfabeto latino."""
+    language = (tgt or "").lower().replace("_", "-").split("-")[0]
+    if language not in {"es", "en", "pt", "fr", "de", "it", "nl"}:
+        return False
+    for char in text:
+        code = ord(char)
+        if (0x3400 <= code <= 0x4DBF or 0x4E00 <= code <= 0x9FFF
+                or 0x3040 <= code <= 0x30FF or 0xAC00 <= code <= 0xD7AF):
+            return True
+    return False
+
+
 def _approve_translation(source, translated, src, tgt, glossary, protected_terms, log=None):
     """Valida integridad técnica; no intenta juzgar ni reescribir la semántica."""
     if not isinstance(translated, str) or not translated.strip():
         return None, "traducción vacía o inválida"
+    if _has_unexpected_script(translated, tgt):
+        return None, "la respuesta contiene caracteres de otro sistema de escritura"
 
     prepared = normalize_names(source, glossary)
     if not names_preserved(prepared, translated, protected_terms):
