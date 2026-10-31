@@ -83,9 +83,13 @@ class PipelineSafetyTests(unittest.TestCase):
         class ContextEngine(Engine):
             name = "context-test"
             max_batch = 1
+            supports_context = True
 
             def translate_batch(self, texts, src, tgt):
-                return ["Traducción"]
+                return [
+                    "Ropa de lino" if text == "Linen Clothing" else "Traducción"
+                    for text in texts
+                ]
 
             def translate_with_context(self, text, src, tgt, context):
                 self.context = context
