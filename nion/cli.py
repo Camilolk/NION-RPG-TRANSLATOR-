@@ -16,7 +16,7 @@ def main(argv=None):
     def common(command):
         command.add_argument("game", help="carpeta del juego (o su carpeta data)")
         command.add_argument("--lang", default="es", help="idioma destino (es, pt-br, fr...)")
-        command.add_argument("--memory", help="archivo de memoria (por defecto nion_memory_<lang>.json)")
+        command.add_argument("--memory", help="archivo de memoria (por defecto nion_memory_<lang>_v2.json)")
         command.add_argument("--glossary", help="JSON de nombres propios (por defecto nion/glossary.json)")
 
     scan_parser = sub.add_parser("scan", help="cuenta textos sin traducir ni gastar nada")
@@ -34,7 +34,7 @@ def main(argv=None):
     apply_parser.add_argument("--out", help="carpeta de salida (por defecto <data>_<lang>)")
 
     args = parser.parse_args(argv)
-    memory = Memory(args.memory or "nion_memory_%s.json" % args.lang.lower())
+    memory = Memory(args.memory or "nion_memory_%s_v2.json" % args.lang.lower())
     try:
         data_dir, entries = scan(args.game)
         glossary = load_glossary(args.glossary)
