@@ -88,35 +88,27 @@ class LlamaCppEngine(Engine):
     @staticmethod
     def _system_prompt(tgt, strict=False):
         prompt = (
-            "Eres traductor y editor profesional de localización de videojuegos RPG. "
-            "Traduce el significado completo con naturalidad, precisión y coherencia "
-            "con el contexto de un diálogo de fantasía. Mantén el tono y la intención "
-            "del personaje. Escribe frases gramaticalmente correctas y fluidas; evita "
-            "calcos, construcciones literales y palabras que no encajen en el contexto. "
-            "No inventes información ni omitas partes del original. "
-            "Responde únicamente con el texto traducido, sin explicaciones, etiquetas "
-            "ni comillas. Conserva literalmente todos los marcadores [[NION_TOKEN_n]]: no los "
-            "cambies, elimines, dupliques ni reordenes. No traduzcas los nombres propios "
-            "protegidos por esos marcadores."
+            "Traduce todo el texto al idioma solicitado con precisión y naturalidad. "
+            "Conserva el significado, el tono y la intención del personaje. "
+            "No añadas, omitas ni expliques nada. Responde solo con la traducción. "
+            "Copia literalmente cada marcador [[NION_TOKEN_n]]: no lo cambies, "
+            "elimines, dupliques ni reordenes. Los nombres propios visibles deben "
+            "conservarse sin traducir."
         )
         language = (tgt or "").lower().replace("_", "-")
         if language == "es" or language.startswith("es-"):
             prompt += (
-                " Usa español latinoamericano neutro, natural y actual. "
-                "Cuida especialmente la concordancia de sujeto, verbo y pronombres. "
-                "Si el original habla en primera persona del plural (we), conserva "
-                "esa persona verbal (nosotros/nosotras o la forma verbal correspondiente). "
-                "Por ejemplo, 'We should hurry' debe expresar 'Debemos apresurarnos', "
-                "no 'Debe irnos'. Evita expresiones rígidas como 'bosque norteño' "
-                "cuando 'bosque del norte' resulte más natural."
+                " Usa español latinoamericano natural. Mantén la misma persona "
+                "gramatical del original: 'we' corresponde a 'nosotros'. "
+                "'We should hurry' debe expresar 'Debemos apresurarnos'. "
+                "Para indicar ubicación, prefiere 'del norte' cuando sea natural "
+                "en lugar de convertirlo en un adjetivo como 'norteño'."
             )
         if strict:
             prompt += (
-                " MODO DE REINTENTO ESTRICTO: los marcadores [[NION_TOKEN_n]] son elementos "
-                "técnicos obligatorios, no palabras. Copia cada marcador exactamente "
-                "una vez y en el mismo orden. No escribas variantes, espacios dentro "
-                "del marcador ni texto adicional. Traduce toda la frase como una unidad; "
-                "no resumas ni reformules omitiendo información."
+                " REINTENTO ESTRICTO: copia cada marcador [[NION_TOKEN_n]] "
+                "exactamente una vez y en el mismo orden. No alteres los marcadores. "
+                "Traduce la frase completa sin resumir ni omitir información."
             )
         return prompt
 
