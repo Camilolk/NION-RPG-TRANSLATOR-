@@ -80,6 +80,12 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 if restored is not None and not names_preserved(prepared, restored, protected_terms):
                     restored = None
                 if restored is not None:
+                    # Las correcciones exactas verificadas se aplican incluso cuando
+                    # la terminología pasó: también corrigen gramática conocida.
+                    corrected, reason = verified_correction(original, restored, src, tgt)
+                    if reason:
+                        log("  control de calidad: se aplicó una corrección verificada.")
+                        restored = corrected
                     issue = quality_issue(original, restored, src, tgt, glossary)
                     if issue:
                         log("  control de calidad: %s; reintentando..." % issue)
