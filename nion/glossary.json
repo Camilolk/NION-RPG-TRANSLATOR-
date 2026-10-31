@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "description": "Nombres oficiales y variantes que deben normalizarse antes de traducir. Añade aquí solo nombres propios confirmados.",
+  "names": {
+    "Elio": ["Элио"],
+    "Shiori": ["Шиори"],
+    "Erika": ["Эрика"],
+    "Grant": ["Грант"],
+    "Tama": ["Тама"],
+    "Kael": ["Кэйл"],
+    "Ryou": ["Рё"]
+  }
+}
