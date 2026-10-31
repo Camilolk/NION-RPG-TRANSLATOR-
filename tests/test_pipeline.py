@@ -78,6 +78,42 @@ class PipelineSafetyTests(unittest.TestCase):
                 r"Elio: Hola \C[2]",
             )
 
+
+    def test_description_receives_its_item_name_and_approved_translation(self):
+        class ContextEngine(Engine):
+            name = "context-test"
+            max_batch = 1
+
+            def translate_batch(self, texts, src, tgt):
+                return ["Traducción"]
+
+            def translate_with_context(self, text, src, tgt, context):
+                self.context = context
+                if text == "Linen Clothing":
+                    return "Ropa de lino"
+                return "Ropa de lino con alta\\ntranspirabilidad."
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = ContextEngine()
+            memory = self.memory(directory)
+            entries = [
+                SimpleNamespace(file="Armors.json", path=(1, "name"),
+                                text="Linen Clothing"),
+                SimpleNamespace(file="Armors.json", path=(1, "description"),
+                                text="Linen clothing with high\\nbreathability."),
+            ]
+            translate_pending(
+                entries, memory, engine, "en", "es",
+                log=lambda _: None, protected_terms=[],
+            )
+            self.assertEqual(memory["Linen Clothing"], "Ropa de lino")
+            self.assertEqual(
+                memory["Linen clothing with high\\nbreathability."],
+                "Ropa de lino con alta\\ntranspirabilidad.",
+            )
+            self.assertIn("Nombre original del registro: Linen Clothing", engine.context)
+            self.assertIn("Nombre traducido y aprobado: Ropa de lino", engine.context)
+
     def test_existing_memory_is_reused_without_semantic_glossary_gate(self):
         with tempfile.TemporaryDirectory() as directory:
             memory = self.memory(directory)
