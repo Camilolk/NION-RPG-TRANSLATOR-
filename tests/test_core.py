@@ -85,6 +85,14 @@ class Tests(unittest.TestCase):
             original, {"habló con": "spoke with", "en": "at", ".": "."}, terms
         ), "Grant spoke with Elio at Village Elder.")
 
+    def test_rpg_codes_and_cyrillic_roundtrip(self):
+        original = r"\\C[2]Привет \\V[1] \\N[1] \\I[64] \\G \\{текст\\} %1 %2 <WordWrap><br> \\n<Grant>"
+        masked, tokens = mask(original, protected_terms=["Grant"])
+        self.assertEqual(unmask(masked, tokens), original)
+        self.assertIn("Привет", masked)
+        self.assertNotIn("\\V[1]", masked)
+        self.assertTrue(needs_translation(original))
+
     def test_needs_translation(self):
         self.assertFalse(needs_translation("\\C[2]  %1 <br> 123"))
         self.assertTrue(needs_translation("\\C[2]Hi"))
