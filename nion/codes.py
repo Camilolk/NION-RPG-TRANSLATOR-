@@ -1,4 +1,4 @@
-"""Protección de códigos de RPG Maker (\\C[2], \\V[1], %1, <tags>...)."""
+"""Protección de códigos RPG Maker y nombres propios durante la traducción."""
 import re
 
 CODE_RE = re.compile("|".join([
@@ -6,76 +6,94 @@ CODE_RE = re.compile("|".join([
     r"\\[A-Za-z]+<[^>\n]*>",           # \n<Nombre>
     r"\\[{}.|!><^$\\]",                # \{  \}  \.  \|  \!  \>  \<  \^  \$  \\
     r"\\[A-Za-z](?![A-Za-z\[<])",      # \G  (letra suelta)
-    r"%\d",                            # %1  %2 (plantillas del motor)
+    r"%\d",                            # %1  %2
     r"<[A-Za-z/][^<>\n]{0,60}>",       # <WordWrap>  <B>  <br>
 ]))
 
 _LETTER = re.compile(r"[^\W\d_]", re.UNICODE)
-
-
-def needs_translation(text):
-    """True si, quitados los códigos, queda alguna letra que traducir."""
-    return bool(_LETTER.search(CODE_RE.sub("", text)))
-
-
-def split_parts(text):
-    """Divide en [(es_codigo, trozo), ...] conservando todo el texto."""
-    parts, pos = [], 0
-    for m in CODE_RE.finditer(text):
-        if m.start() > pos:
-            parts.append((False, text[pos:m.start()]))
-        parts.append((True, m.group(0)))
-        pos = m.end()
-    if pos < len(text):
-        parts.append((False, text[pos:]))
-    return parts
+_PLACEHOLDER_RE = re.compile(r"⟦(\d+)⟧")
 
 
 def default_placeholder(i):
-    return "\u27e6%d\u27e7" % i
+    return "⟦%d⟧" % i
 
 
-def mask(text, placeholder=default_placeholder):
-    """Sustituye cada código por un marcador. Devuelve (texto_enmascarado, codigos)."""
-    out, codes = [], []
-    for is_code, chunk in split_parts(text):
-        if is_code:
-            out.append(placeholder(len(codes)))
-            codes.append(chunk)
+def _name_pattern(protected_terms):
+    terms = sorted({term for term in protected_terms
+                    if isinstance(term, str) and len(term.strip()) >= 2},
+                   key=len, reverse=True)
+    if not terms:
+        return None
+    alternatives = "|".join(re.escape(term) for term in terms)
+    return re.compile(r"(?<!\w)(?:" + alternatives + r")(?!\w)", re.IGNORECASE)
+
+
+def split_parts(text, protected_terms=()):
+    """Divide en [(es_token, trozo), ...], sin perder códigos ni nombres protegidos."""
+    parts, pos = [], 0
+    names_re = _name_pattern(protected_terms)
+    while pos < len(text):
+        code_match = CODE_RE.search(text, pos)
+        name_match = names_re.search(text, pos) if names_re else None
+        matches = [m for m in (code_match, name_match) if m is not None]
+        if not matches:
+            parts.append((False, text[pos:]))
+            break
+        match = min(matches, key=lambda m: (m.start(), 0 if m.re is CODE_RE else 1))
+        if match.start() > pos:
+            parts.append((False, text[pos:match.start()]))
+        parts.append((True, match.group(0)))
+        pos = match.end()
+    return parts
+
+
+def mask(text, placeholder=default_placeholder, protected_terms=()):
+    """Sustituye códigos y nombres protegidos por marcadores. Devuelve (texto, tokens)."""
+    out, tokens = [], []
+    for is_token, chunk in split_parts(text, protected_terms):
+        if is_token:
+            out.append(placeholder(len(tokens)))
+            tokens.append(chunk)
         else:
             out.append(chunk)
-    return "".join(out), codes
+    return "".join(out), tokens
 
 
-def unmask(translated, codes, placeholder=default_placeholder):
-    """Restaura los códigos. Devuelve None si el traductor perdió o duplicó alguno."""
+def unmask(translated, tokens, placeholder=default_placeholder):
+    """Restaura tokens solo si están todos, una vez y en su orden original."""
+    expected = [str(i) for i in range(len(tokens))]
+    found = _PLACEHOLDER_RE.findall(translated)
+    if found != expected:
+        return None
     result = translated
-    for i, code in enumerate(codes):
+    for i, token in enumerate(tokens):
         ph = placeholder(i)
         if result.count(ph) != 1:
             return None
-        result = result.replace(ph, code)
+        result = result.replace(ph, token)
     return result
 
 
-def text_segments(text):
-    """Trozos de texto traducible (sin códigos) como (relleno_izq, nucleo, relleno_der)."""
+def text_segments(text, protected_terms=()):
+    """Trozos traducibles (relleno_izq, núcleo, relleno_der), excluyendo tokens."""
     segs = []
-    for is_code, chunk in split_parts(text):
-        if is_code or not _LETTER.search(chunk):
+    for is_token, chunk in split_parts(text, protected_terms):
+        if is_token or not _LETTER.search(chunk):
             continue
         core = chunk.strip()
+        if not core:
+            continue
         lead = chunk[:len(chunk) - len(chunk.lstrip())]
         trail = chunk[len(chunk.rstrip()):]
         segs.append((lead, core, trail))
     return segs
 
 
-def compose_from_segments(text, memory):
-    """Rearma `text` usando traducciones de trozos ya conocidas. None si falta alguno."""
+def compose_from_segments(text, memory, protected_terms=()):
+    """Rearma el texto con memoria, sin traducir códigos ni nombres protegidos."""
     out = []
-    for is_code, chunk in split_parts(text):
-        if is_code or not _LETTER.search(chunk):
+    for is_token, chunk in split_parts(text, protected_terms):
+        if is_token or not _LETTER.search(chunk):
             out.append(chunk)
             continue
         core = chunk.strip()
