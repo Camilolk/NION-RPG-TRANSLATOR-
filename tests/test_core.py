@@ -3,7 +3,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from nion.codes import (compose_from_segments, mask, needs_translation, unmask)
 from nion.engine import Engine, EchoEngine, EngineError
-from nion.extract import find_data_dir, iter_entries
+from nion.extract import find_data_dir, iter_entries, protected_names
 from nion.memory import Memory
 from nion.pipeline import apply_translations, pending_texts, scan, translate_pending
 
@@ -21,13 +21,14 @@ def write(path, obj):
 
 def make_game(root, mv=False):
     d = os.path.join(root, "www", "data") if mv else os.path.join(root, "data")
+    write(d + "/Actors.json", [None, {"name": "Grant", "nickname": "The Hero", "profile": "A brave hero."}])
     write(d + "/System.json", {"currencyUnit": "Gold", "skillTypes": ["", "Magic"],
           "terms": {"basic": ["Level"], "commands": ["Fight", None], "params": ["Max HP"],
                     "messages": {"victory": "%1 is victorious!"}}})
     write(d + "/Items.json", [None, {"name": "Potion", "description": "Heals HP."}])
-    write(d + "/Map001.json", {"displayName": "Old Town", "events": [None, {"pages": [{"list": [
+    write(d + "/Map001.json", {"displayName": "Old Town", "events": [None, {"name": "Village Elder", "pages": [{"list": [
         {"code": 101, "indent": 0, "parameters": ["", 0, 0, 2, "Elio"]},
-        {"code": 401, "indent": 0, "parameters": ["\\C[2]Hello\\C[0] world, \\N[1]!"]},
+        {"code": 401, "indent": 0, "parameters": ["\\C[2]Grant says hello\\C[0] world, \\N[1]!"]},
         {"code": 102, "indent": 0, "parameters": [["Yes", "No"], 1]},
         {"code": 402, "indent": 0, "parameters": [0, "Yes"]},
         {"code": 108, "indent": 0, "parameters": ["comment, do not translate"]},
@@ -54,7 +55,7 @@ class LossyEngine(Engine):
     name = "lossy"
 
     def translate_batch(self, texts, src, tgt):
-        return ["X:" + t.replace("\u27e6", "").replace("\u27e7", "") for t in texts]
+        return ["X:" + t.replace("⟦", "").replace("⟧", "") for t in texts]
 
 
 class Tests(unittest.TestCase):
@@ -67,10 +68,22 @@ class Tests(unittest.TestCase):
 
     def test_mask_roundtrip(self):
         t = "\\C[2]Hola\\C[0] %1 <WordWrap> \\{grande\\}"
-        masked, codes = mask(t)
+        masked, tokens = mask(t)
         self.assertNotIn("\\C", masked)
-        self.assertEqual(unmask(masked, codes), t)
-        self.assertIsNone(unmask(masked.replace("\u27e60\u27e7", ""), codes))
+        self.assertEqual(unmask(masked, tokens), t)
+        self.assertIsNone(unmask(masked.replace("⟦0⟧", ""), tokens))
+        self.assertIsNone(unmask(masked + " ⟦99⟧", tokens))
+        self.assertIsNone(unmask(masked.replace("⟦0⟧", "⟦7⟧"), tokens))
+
+    def test_proper_names_are_masked_and_restored(self):
+        terms = ["Grant", "Elio", "Village Elder"]
+        original = "Grant habló con Elio en Village Elder."
+        masked, tokens = mask(original, protected_terms=terms)
+        self.assertEqual(tokens, ["Grant", "Elio", "Village Elder"])
+        self.assertEqual(unmask(masked, tokens), original)
+        self.assertEqual(compose_from_segments(
+            original, {"habló con": "spoke with", "en": "at", ".": "."}, terms
+        ), "Grant spoke with Elio at Village Elder.")
 
     def test_needs_translation(self):
         self.assertFalse(needs_translation("\\C[2]  %1 <br> 123"))
@@ -82,12 +95,40 @@ class Tests(unittest.TestCase):
                 root = os.path.join(self.root, "mv" if mv else "mz")
                 make_game(root, mv)
                 data_dir = find_data_dir(root)
-                texts = [e.text for e in iter_entries(data_dir)]
-                for expected in ("Potion", "Heals HP.", "Old Town", "Elio", "Yes", "No",
-                                 "Gold", "Magic", "Level", "Fight", "Max HP", "%1 is victorious!"):
+                texts = [entry.text for entry in iter_entries(data_dir)]
+                for expected in ("Potion", "Heals HP.", "Old Town", "Yes", "No",
+                                 "Gold", "Magic", "Level", "Fight", "Max HP",
+                                 "%1 is victorious!", "The Hero", "A brave hero."):
                     self.assertIn(expected, texts)
+                self.assertNotIn("Grant", texts)
+                self.assertNotIn("Elio", texts)
+                self.assertNotIn("Village Elder", texts)
                 self.assertNotIn("comment, do not translate", texts)
                 self.assertNotIn("editor only", texts)
+
+    def test_names_survive_translation_and_apply(self):
+        root = os.path.join(self.root, "named-game")
+        data_dir = make_game(root)
+        names = protected_names(data_dir)
+        self.assertIn("Grant", names)
+        self.assertIn("Elio", names)
+        self.assertIn("Village Elder", names)
+
+        memory = Memory(os.path.join(self.root, "names-memory.json"))
+        _, entries = scan(root)
+        translate_pending(entries, memory, EchoEngine(), "en", "es",
+                          log=lambda *_: None, protected_terms=names)
+        out = os.path.join(self.root, "named-out")
+        apply_translations(root, out, memory)
+        output = read(out + "/Map001.json")
+        line = output["events"][1]["pages"][0]["list"][1]["parameters"][0]
+        self.assertIn("Grant", line)
+        self.assertIn("Elio", line)  # Elio está representado por \N[1] y su nombre no se traduce
+        self.assertIn("\\C[2]", line)
+        self.assertIn("\\C[0]", line)
+        self.assertIn("\\N[1]", line)
+        self.assertEqual(read(out + "/Actors.json")[1]["name"], "Grant")
+        self.assertEqual(output["events"][1]["pages"][0]["list"][0]["parameters"][4], "Elio")
 
     def test_apply_never_touches_original(self):
         root = os.path.join(self.root, "g")
@@ -127,7 +168,7 @@ class Tests(unittest.TestCase):
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
-        self.assertTrue(line.startswith("\\C[2]X:Hello\\C[0]"), line)
+        self.assertTrue(line.startswith("\\C[2]X:Grant says hello\\C[0]"), line)
         self.assertIn("\\N[1]", line)
 
     def test_resume_after_failure(self):
@@ -139,10 +180,10 @@ class Tests(unittest.TestCase):
         with self.assertRaises(EngineError):
             translate_pending(entries, Memory(path), BreakingEngine(), "en", "es", log=lambda *_: None)
         saved = len(Memory(path))
-        self.assertGreater(saved, 0)                       # lo del primer lote se conservó
+        self.assertGreater(saved, 0)
         mem = Memory(path)
         before = len(pending_texts(entries, mem))
-        BreakingEngine.calls = 10                          # ya no falla
+        BreakingEngine.calls = 10
         translate_pending(entries, mem, BreakingEngine(), "en", "es", log=lambda *_: None)
         self.assertEqual(len(pending_texts(entries, mem)), 0)
         self.assertGreater(before, 0)
@@ -151,8 +192,9 @@ class Tests(unittest.TestCase):
         mem = Memory(os.path.join(self.root, "m.json"))
         mem.set("Hello", "Hola")
         mem.set("world,", "mundo,")
-        self.assertEqual(compose_from_segments("\\C[2]Hello\\C[0] world, \\N[1]!", mem),
-                         "\\C[2]Hola\\C[0] mundo, \\N[1]!")
+        self.assertEqual(compose_from_segments(
+            "\\C[2]Hello\\C[0] world, \\N[1]!", mem
+        ), "\\C[2]Hola\\C[0] mundo, \\N[1]!")
         self.assertIsNone(compose_from_segments("Unknown", mem))
 
 
