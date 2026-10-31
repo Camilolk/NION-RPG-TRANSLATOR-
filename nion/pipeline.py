@@ -18,7 +18,7 @@ def scan(game_path):
     return data_dir, list(iter_entries(data_dir))
 
 
-def _approve_translation(source, translated, src, tgt, glossary, protected_terms):
+def _approve_translation(source, translated, src, tgt, glossary, protected_terms, log=None):
     """Aplica correcciones confirmadas y rechaza fallos verificables."""
     if not isinstance(translated, str) or not translated.strip():
         return None, "traducción vacía o inválida"
@@ -30,6 +30,8 @@ def _approve_translation(source, translated, src, tgt, glossary, protected_terms
     corrected, reason = verified_correction(source, translated, src, tgt)
     if reason:
         translated = corrected
+        if log:
+            log("  control de calidad: se aplicó una corrección verificada.")
 
     issue = quality_issue(source, translated, src, tgt, glossary)
     if issue:
@@ -133,7 +135,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                     continue
 
                 approved, issue = _approve_translation(
-                    prepared, restored, src, tgt, glossary, protected_terms
+                    prepared, restored, src, tgt, glossary, protected_terms, log
                 )
                 if issue:
                     log("  control de calidad: %s; reintentando..." % issue)
@@ -143,7 +145,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                         if restored is not None:
                             approved, issue = _approve_translation(
                                 prepared, restored, src, tgt,
-                                glossary, protected_terms,
+                                glossary, protected_terms, log,
                             )
                     if issue:
                         rejected.append(original)
@@ -176,7 +178,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
             outputs = _translate_exact(engine, chunk, src, tgt)
             for core, translated in zip(chunk, outputs):
                 approved, issue = _approve_translation(
-                    core, translated, src, tgt, glossary, protected_terms
+                    core, translated, src, tgt, glossary, protected_terms, log
                 )
                 if issue:
                     log("  segmento pendiente (%s): %s" % (issue, core))
@@ -195,7 +197,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 continue
             approved, issue = _approve_translation(
                 prepared_texts[original], composed, src, tgt,
-                glossary, protected_terms,
+                glossary, protected_terms, log,
             )
             if issue:
                 rejected.append(original)
