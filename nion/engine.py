@@ -393,6 +393,7 @@ class OpenRouterEngine(Engine):
 
                 if empty_retries < 1 and attempt < 2:
                     empty_retries += 1
+                    time.sleep(delays[0])
                     logger.warning(
                         "OpenRouter devolvió contenido vacío; finish_reason=%s "
                         "reasoning_present=%s reasoning_tokens=%s status=%s",
