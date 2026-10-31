@@ -107,23 +107,26 @@ class LlamaCppEngine(Engine):
     @staticmethod
     def _system_prompt(tgt, strict=False, terminology=None, terminology_variants=None):
         prompt = (
-            "Traduce todo el texto al idioma solicitado con precisión y naturalidad. "
-            "Conserva el significado, el tono y la intención del personaje. "
-            "No añadas, omitas ni expliques nada. Responde solo con la traducción. "
-            "Copia literalmente cada marcador [[NION_TOKEN_n]]: no lo cambies, "
-            "elimines, dupliques ni reordenes. Los nombres propios visibles deben "
-            "conservarse sin traducir."
+            "Eres traductor de localización de videojuegos RPG. Traduce el texto "
+            "completo al idioma solicitado con precisión y naturalidad. Conserva "
+            "el significado, el tono y la intención del personaje; evita calcos "
+            "literales y palabras que no encajen en el contexto de un juego. "
+            "No inventes información ni omitas partes del original. Responde solo "
+            "con la traducción, sin explicaciones ni comillas. Copia literalmente "
+            "cada marcador [[NION_TOKEN_n]]: no lo cambies, elimines, dupliques "
+            "ni reordenes. Los nombres propios visibles deben conservarse."
         )
         language = (tgt or "").lower().replace("_", "-")
         if language == "es" or language.startswith("es-"):
             prompt += (
-                " El idioma destino es español. Usa español latinoamericano natural. "
-                "Antes de traducir, identifica quién realiza la acción y conserva "
-                "exactamente la persona y el número gramatical del sujeto, así como "
-                "el tiempo verbal y la modalidad. No conviertas primera, segunda o "
-                "tercera persona en otra, ni cambies singular por plural o viceversa. "
-                "Interpreta el sentido de la frase completa; no reutilices una "
-                "traducción fija para sujetos diferentes."
+                " El idioma destino es español. Usa español latinoamericano natural "
+                "y fluido. Cuida la concordancia de género y número entre artículos, "
+                "sustantivos y adjetivos. Antes de traducir, identifica quién realiza "
+                "la acción y conserva la persona, el número, el tiempo verbal y la "
+                "modalidad del original. No conviertas primera, segunda o tercera "
+                "persona en otra. Evita falsos amigos y expresiones calcadas del inglés. "
+                "Si el texto es un fragmento de diálogo, conserva su sentido y sus "
+                "puntos suspensivos; no inventes un sujeto ni información que no aparezca."
             )
         if (language == "es" or language.startswith("es-")) and terminology:
             variants = terminology_variants or {}
@@ -162,7 +165,9 @@ class LlamaCppEngine(Engine):
                         tgt, strict=strict, terminology=self.terminology,
                         terminology_variants=self.terminology_variants
                     )},
-                    {"role": "user", "content": text}
+                    {"role": "user", "content":
+                     "Idioma de origen: %s. Idioma de destino: %s.\nTexto a traducir:\n%s"
+                     % (src, tgt, text)},
                 ],
                 "temperature": 0.1,
                 "max_tokens": min(1024, max(128, len(text) * 3)),
