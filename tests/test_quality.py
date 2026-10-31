@@ -166,12 +166,18 @@ class QualityTests(unittest.TestCase):
                 "[Equipamiento general] Ropa de lino con alta transpirabilidad."
             ),
             "A large, old shield that survived time. Has something inscribed but it has mostly faded away.": (
-                "Un escudo grande y antiguo que ha resistido el paso del tiempo. "
+                "Un escudo grande y viejo que ha resistido el paso del tiempo. "
                 "Tiene algo grabado, pero casi se ha borrado."
             ),
             "A vest made of tanned hide.": "Un chaleco hecho de cuero curtido.",
+            "[General Equipment] A vest made of tanned hide.": (
+                "[Equipamiento general] Un chaleco hecho de cuero curtido."
+            ),
             "A vest made of leather hardened with glue.": (
                 "Un chaleco de cuero endurecido con pegamento."
+            ),
+            "[General Equipment] A vest made of leather\\nhardened with glue.": (
+                "[Equipamiento general] Un chaleco de cuero endurecido con pegamento."
             ),
             "[Large Shield] A large shield made of iron steel.": (
                 "[Escudo grande] Un escudo grande hecho de acero."
@@ -184,6 +190,18 @@ class QualityTests(unittest.TestCase):
                 )
                 self.assertEqual(corrected, expected)
                 self.assertTrue(reason)
+
+        glossary = load_glossary()
+        old_shield_source = (
+            "A large, old shield that survived time.\\n"
+            "Has something inscribed but it has mostly faded away."
+        )
+        old_shield_translation = cases[
+            "A large, old shield that survived time. Has something inscribed but it has mostly faded away."
+        ]
+        self.assertIsNone(quality_issue(
+            old_shield_source, old_shield_translation, "en", "es", glossary
+        ))
 
     def test_normalizes_case_spacing_and_final_punctuation(self):
         corrected, reason = verified_correction(
