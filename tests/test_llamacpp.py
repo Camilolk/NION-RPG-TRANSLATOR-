@@ -50,10 +50,14 @@ class LlamaCppTests(unittest.TestCase):
         request = mocked.call_args.args[0]
         payload = json.loads(request.data.decode("utf-8"))
         prompt = payload["messages"][0]["content"]
-        self.assertIn("español latinoamericano neutro", prompt)
-        self.assertIn("concordancia de sujeto, verbo y pronombres", prompt)
-        self.assertIn("Debemos apresurarnos", prompt)
+        self.assertIn("español latinoamericano natural", prompt)
+        self.assertIn("persona y el número gramatical", prompt)
+        self.assertIn("tiempo verbal y la modalidad", prompt)
+        self.assertIn("primera, segunda o tercera persona", prompt)
+        self.assertNotIn("We should hurry", prompt)
+        self.assertNotIn("Debemos apresurarnos", prompt)
         self.assertIn("[[NION_TOKEN_n]]", prompt)
+        self.assertEqual(payload["messages"][1]["content"], "We should hurry.")
 
     @patch("nion.engine.urllib.request.urlopen")
     def test_other_languages_do_not_receive_spanish_specific_rules(self, mocked):

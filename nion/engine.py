@@ -88,35 +88,29 @@ class LlamaCppEngine(Engine):
     @staticmethod
     def _system_prompt(tgt, strict=False):
         prompt = (
-            "Eres traductor y editor profesional de localización de videojuegos RPG. "
-            "Traduce el significado completo con naturalidad, precisión y coherencia "
-            "con el contexto de un diálogo de fantasía. Mantén el tono y la intención "
-            "del personaje. Escribe frases gramaticalmente correctas y fluidas; evita "
-            "calcos, construcciones literales y palabras que no encajen en el contexto. "
-            "No inventes información ni omitas partes del original. "
-            "Responde únicamente con el texto traducido, sin explicaciones, etiquetas "
-            "ni comillas. Conserva literalmente todos los marcadores [[NION_TOKEN_n]]: no los "
-            "cambies, elimines, dupliques ni reordenes. No traduzcas los nombres propios "
-            "protegidos por esos marcadores."
+            "Traduce todo el texto al idioma solicitado con precisión y naturalidad. "
+            "Conserva el significado, el tono y la intención del personaje. "
+            "No añadas, omitas ni expliques nada. Responde solo con la traducción. "
+            "Copia literalmente cada marcador [[NION_TOKEN_n]]: no lo cambies, "
+            "elimines, dupliques ni reordenes. Los nombres propios visibles deben "
+            "conservarse sin traducir."
         )
         language = (tgt or "").lower().replace("_", "-")
         if language == "es" or language.startswith("es-"):
             prompt += (
-                " Usa español latinoamericano neutro, natural y actual. "
-                "Cuida especialmente la concordancia de sujeto, verbo y pronombres. "
-                "Si el original habla en primera persona del plural (we), conserva "
-                "esa persona verbal (nosotros/nosotras o la forma verbal correspondiente). "
-                "Por ejemplo, 'We should hurry' debe expresar 'Debemos apresurarnos', "
-                "no 'Debe irnos'. Evita expresiones rígidas como 'bosque norteño' "
-                "cuando 'bosque del norte' resulte más natural."
+                " El idioma destino es español. Usa español latinoamericano natural. "
+                "Antes de traducir, identifica quién realiza la acción y conserva "
+                "exactamente la persona y el número gramatical del sujeto, así como "
+                "el tiempo verbal y la modalidad. No conviertas primera, segunda o "
+                "tercera persona en otra, ni cambies singular por plural o viceversa. "
+                "Interpreta el sentido de la frase completa; no reutilices una "
+                "traducción fija para sujetos diferentes."
             )
         if strict:
             prompt += (
-                " MODO DE REINTENTO ESTRICTO: los marcadores [[NION_TOKEN_n]] son elementos "
-                "técnicos obligatorios, no palabras. Copia cada marcador exactamente "
-                "una vez y en el mismo orden. No escribas variantes, espacios dentro "
-                "del marcador ni texto adicional. Traduce toda la frase como una unidad; "
-                "no resumas ni reformules omitiendo información."
+                " MODO DE REINTENTO ESTRICTO: copia cada marcador [[NION_TOKEN_n]] "
+                "exactamente una vez y en el mismo orden. No alteres los marcadores. "
+                "Traduce la frase completa sin resumir ni omitir información."
             )
         return prompt
 
@@ -131,8 +125,7 @@ class LlamaCppEngine(Engine):
                 "model": "local-model",
                 "messages": [
                     {"role": "system", "content": self._system_prompt(tgt, strict=strict)},
-                    {"role": "user", "content":
-                     "Idioma origen: %s\nIdioma destino: %s\nTexto:\n%s" % (src, tgt, text)}
+                    {"role": "user", "content": text}
                 ],
                 "temperature": 0.1,
                 "max_tokens": min(1024, max(128, len(text) * 3)),
