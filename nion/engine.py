@@ -95,7 +95,7 @@ class LlamaCppEngine(Engine):
             "calcos, construcciones literales y palabras que no encajen en el contexto. "
             "No inventes información ni omitas partes del original. "
             "Responde únicamente con el texto traducido, sin explicaciones, etiquetas "
-            "ni comillas. Conserva literalmente todos los marcadores ⟦n⟧: no los "
+            "ni comillas. Conserva literalmente todos los marcadores [[NION_TOKEN_n]]: no los "
             "cambies, elimines, dupliques ni reordenes. No traduzcas los nombres propios "
             "protegidos por esos marcadores."
         )
@@ -112,7 +112,7 @@ class LlamaCppEngine(Engine):
             )
         if strict:
             prompt += (
-                " MODO DE REINTENTO ESTRICTO: los marcadores ⟦n⟧ son elementos "
+                " MODO DE REINTENTO ESTRICTO: los marcadores [[NION_TOKEN_n]] son elementos "
                 "técnicos obligatorios, no palabras. Copia cada marcador exactamente "
                 "una vez y en el mismo orden. No escribas variantes, espacios dentro "
                 "del marcador ni texto adicional. Traduce toda la frase como una unidad; "

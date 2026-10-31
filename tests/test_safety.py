@@ -23,11 +23,11 @@ class RetryEngine(Engine):
         self.retried = []
 
     def translate_batch(self, texts, src, tgt):
-        return ["⟦99⟧ respuesta rota"]
+        return ["[[NION_TOKEN_99]] respuesta rota"]
 
     def retry_masked(self, text, src, tgt):
         self.retried.append(text)
-        return text.replace("⟦0⟧", "⟦0⟧Traducción correcta")
+        return text.replace("[[NION_TOKEN_0]]", "[[NION_TOKEN_0]]Traducción correcta")
 
 
 class SafetyTests(unittest.TestCase):

@@ -1,7 +1,7 @@
-import json, os, sys, tempfile, unittest
+import json, os, re, sys, tempfile, unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from nion.codes import (compose_from_segments, mask, needs_translation, unmask)
+from nion.codes import (compose_from_segments, mask, names_preserved, needs_translation, unmask)
 from nion.engine import Engine, EchoEngine, EngineError
 from nion.extract import find_data_dir, iter_entries, protected_names
 from nion.memory import Memory
@@ -56,7 +56,7 @@ class LossyEngine(Engine):
     name = "lossy"
 
     def translate_batch(self, texts, src, tgt):
-        return ["X:" + t.replace("⟦", "").replace("⟧", "") for t in texts]
+        return ["X:" + re.sub(r"\[\[NION_TOKEN_\d+\]\]", "", t) for t in texts]
 
 
 class Tests(unittest.TestCase):
@@ -73,14 +73,30 @@ class Tests(unittest.TestCase):
         self.assertEqual(unmask(masked.replace("We should hurry.", "Debemos apresurarnos."),
                                 tokens), "Elio: Debemos apresurarnos.")
 
+
+    def test_code_only_mask_keeps_proper_names_visible(self):
+        original = r"\C[22]Elio: We need to find Shiori before sunset. \V[1]"
+        masked, tokens = mask(original, protected_terms=())
+        self.assertEqual(tokens, [r"\C[22]", r"\V[1]"])
+        self.assertIn("Elio", masked)
+        self.assertIn("Shiori", masked)
+        translated = masked.replace("We need to find", "Necesitamos encontrar a")
+        restored = unmask(translated, tokens)
+        self.assertTrue(names_preserved(original, restored, ["Elio", "Shiori"]))
+        self.assertIn(r"\C[22]Elio", restored)
+        self.assertIn(r"Shiori before", restored)
+
+    def test_names_preserved_rejects_missing_name(self):
+        self.assertFalse(names_preserved("Elio habló con Shiori.", "Elio habló.", ["Elio", "Shiori"]))
+
     def test_mask_roundtrip(self):
         t = "\\C[2]Hola\\C[0] %1 <WordWrap> \\{grande\\}"
         masked, tokens = mask(t)
         self.assertNotIn("\\C", masked)
         self.assertEqual(unmask(masked, tokens), t)
-        self.assertIsNone(unmask(masked.replace("⟦0⟧", ""), tokens))
-        self.assertIsNone(unmask(masked + " ⟦99⟧", tokens))
-        self.assertIsNone(unmask(masked.replace("⟦0⟧", "⟦7⟧"), tokens))
+        self.assertIsNone(unmask(masked.replace("[[NION_TOKEN_0]]", ""), tokens))
+        self.assertIsNone(unmask(masked + " [[NION_TOKEN_99]]", tokens))
+        self.assertIsNone(unmask(masked.replace("[[NION_TOKEN_0]]", "[[NION_TOKEN_7]]"), tokens))
 
     def test_proper_names_are_masked_and_restored(self):
         terms = ["Grant", "Elio", "Village Elder"]
@@ -232,8 +248,8 @@ class Tests(unittest.TestCase):
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
-        self.assertTrue(line.startswith("\\C[2]Grant"), line)
-        self.assertIn("X:says hello", line)
+        self.assertTrue(line.startswith("\\C[2]X:Grant"), line)
+        self.assertIn("X:Grant says hello", line)
         self.assertIn("\\N[1]", line)
 
     def test_resume_after_failure(self):

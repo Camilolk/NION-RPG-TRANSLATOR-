@@ -3,7 +3,7 @@ import json
 import os
 import shutil
 
-from .codes import compose_from_segments, mask, needs_translation, text_segments, unmask
+from .codes import compose_from_segments, mask, names_preserved, needs_translation, text_segments, unmask
 from .engine import EngineError
 from .extract import find_data_dir, iter_entries, load_json, protected_names
 from .glossary import load_glossary, normalize_names
@@ -66,15 +66,20 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
         done = 0
         for chunk in _chunks(pending, engine.max_batch):
             plan = [
-                mask(normalize_names(text, glossary), engine.placeholder, protected_terms)
+                mask(normalize_names(text, glossary), engine.placeholder, ())
                 for text in chunk
             ]
             outputs = _translate_exact(engine, [masked for masked, _ in plan], src, tgt)
             for original, (masked, tokens), translated in zip(chunk, plan, outputs):
                 restored = unmask(translated, tokens, engine.placeholder)
+                prepared = normalize_names(original, glossary)
+                if restored is not None and not names_preserved(prepared, restored, protected_terms):
+                    restored = None
                 if restored is None and hasattr(engine, "retry_masked"):
                     retried = engine.retry_masked(masked, src, tgt)
                     restored = unmask(retried, tokens, engine.placeholder)
+                    if restored is not None and not names_preserved(prepared, restored, protected_terms):
+                        restored = None
                 if restored is None:
                     leftovers.append(original)
                 else:
@@ -90,7 +95,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
         segments = []
         prepared_texts = {text: normalize_names(text, glossary) for text in leftovers}
         for text in leftovers:
-            for _, core, _ in text_segments(prepared_texts[text], protected_terms):
+            for _, core, _ in text_segments(prepared_texts[text], ()):
                 if core not in memory and core not in segments:
                     segments.append(core)
         done = 0
@@ -102,7 +107,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
             done += len(chunk)
             log("  trozos %d / %d" % (done, len(segments)))
         for text in leftovers:
-            composed = compose_from_segments(prepared_texts[text], memory, protected_terms)
+            composed = compose_from_segments(prepared_texts[text], memory, ())
             if composed is not None:
                 memory.set(text, composed)
     memory.save()

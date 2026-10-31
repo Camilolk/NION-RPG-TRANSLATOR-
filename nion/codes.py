@@ -11,7 +11,7 @@ CODE_RE = re.compile("|".join([
 ]))
 
 _LETTER = re.compile(r"[^\W\d_]", re.UNICODE)
-_PLACEHOLDER_RE = re.compile(r"⟦(\d+)⟧")
+_PLACEHOLDER_RE = re.compile(r"\[\[NION_TOKEN_(\d+)\]\]")
 
 
 
@@ -22,7 +22,7 @@ def needs_translation(text):
     return bool(_LETTER.search(CODE_RE.sub("", text)))
 
 def default_placeholder(i):
-    return "⟦%d⟧" % i
+    return "[[NION_TOKEN_%d]]" % i
 
 
 def _name_pattern(protected_terms):
@@ -85,6 +85,20 @@ def unmask(translated, tokens, placeholder=default_placeholder):
             return None
         result = result.replace(ph, token)
     return result
+
+
+def names_preserved(original, translated, protected_terms=()):
+    """Comprueba que los nombres protegidos visibles sigan presentes en la salida."""
+    source_names = [
+        chunk.rstrip(":")
+        for is_token, chunk in split_parts(original, protected_terms)
+        if is_token and not CODE_RE.fullmatch(chunk)
+    ]
+    output = translated.casefold()
+    for name in source_names:
+        if name.casefold() not in output:
+            return False
+    return True
 
 
 def text_segments(text, protected_terms=()):
