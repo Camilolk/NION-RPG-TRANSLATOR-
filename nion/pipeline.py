@@ -125,15 +125,10 @@ def _format_record_context(record, memory, protected_terms, glossary, src, tgt):
     if not record:
         return None
     label, source_name = record
-    translated_name = render(
-        source_name, memory, protected_terms, glossary, src, tgt
-    )
     details = [
         "Tipo de registro: %s." % label,
         "Nombre original del registro: %s." % source_name,
     ]
-    if translated_name:
-        details.append("Nombre traducido y aprobado: %s." % translated_name)
     details.append(
         "La descripción pertenece a este registro. Usa el nombre para "
         "interpretar términos ambiguos y mantener la terminología; no "
@@ -247,6 +242,17 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
         # DeepL no usa marcadores propios: se traducen solo segmentos de texto,
         # manteniendo códigos RPG Maker y nombres oficiales fuera de la petición.
         leftovers = list(pending)
+
+    # Los motores con marcadores deben traducir el texto completo. Si alteran
+    # marcadores incluso tras reintentar, no fragmentar: se perdería el contexto
+    # entre líneas y podrían guardarse traducciones semánticamente incorrectas.
+    if leftovers and engine.supports_masking:
+        rejected.extend(leftovers)
+        log(
+            "  %d textos rechazados: el motor alteró marcadores; "
+            "se conservó cada texto completo sin fragmentarlo." % len(leftovers)
+        )
+        leftovers = []
 
     if leftovers:
         log("Traducción segura por segmentos para %d textos..." % len(leftovers))
