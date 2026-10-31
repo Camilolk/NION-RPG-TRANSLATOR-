@@ -37,8 +37,8 @@ def _approve_translation(source, translated, src, tgt, glossary, protected_terms
     return translated, None
 
 
-def render(text, memory, protected_terms=(), glossary=None):
-    """Devuelve solo traducciones utilizables; ignora memoria con fallos detectables."""
+def render(text, memory, protected_terms=(), glossary=None, src="en", tgt="es"):
+    """Devuelve una traducción solo si pasa los controles aplicables al par de idiomas."""
     glossary = glossary or load_glossary()
     prepared = normalize_names(text, glossary)
 
@@ -46,7 +46,7 @@ def render(text, memory, protected_terms=(), glossary=None):
         if key in memory:
             translated, issue = _approve_translation(
                 prepared, normalize_names(memory[key], glossary),
-                "en", "es", glossary, protected_terms,
+                src, tgt, glossary, protected_terms,
             )
             if translated is not None:
                 return translated
@@ -56,12 +56,12 @@ def render(text, memory, protected_terms=(), glossary=None):
         return None
     translated, issue = _approve_translation(
         prepared, normalize_names(composed, glossary),
-        "en", "es", glossary, protected_terms,
+        src, tgt, glossary, protected_terms,
     )
     return translated
 
 
-def pending_texts(entries, memory, protected_terms=(), glossary=None):
+def pending_texts(entries, memory, protected_terms=(), glossary=None, src="en", tgt="es"):
     glossary = glossary or load_glossary()
     seen, out = set(), []
     for entry in entries:
@@ -69,7 +69,7 @@ def pending_texts(entries, memory, protected_terms=(), glossary=None):
             continue
         seen.add(entry.text)
         if needs_translation(entry.text) and render(
-            entry.text, memory, protected_terms, glossary
+            entry.text, memory, protected_terms, glossary, src, tgt
         ) is None:
             out.append(entry.text)
     return out
@@ -101,7 +101,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
             glossary.get("terms", {}), glossary.get("term_variants", {})
         )
 
-    pending = pending_texts(entries, memory, protected_terms, glossary)
+    pending = pending_texts(entries, memory, protected_terms, glossary, src, tgt)
     log("Textos por traducir: %d (%d caracteres)" %
         (len(pending), sum(map(len, pending))))
     leftovers = []
@@ -241,7 +241,7 @@ def _normalize_actor_names(out_dir, glossary):
                 os.remove(temporary)
 
 
-def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
+def apply_translations(game_path, out_dir, memory, log=print, glossary=None, src="en", tgt="es"):
     """No crea una salida parcial: exige todas las traducciones antes de copiar."""
     glossary = glossary or load_glossary()
     data_dir = find_data_dir(game_path)
@@ -279,7 +279,7 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
         changed = False
         for entry in entries:
             translated = (
-                render(entry.text, memory, protected_terms, glossary)
+                render(entry.text, memory, protected_terms, glossary, src, tgt)
                 if needs_translation(entry.text) else None
             )
             if translated is not None:
