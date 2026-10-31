@@ -14,6 +14,13 @@ _LETTER = re.compile(r"[^\W\d_]", re.UNICODE)
 _PLACEHOLDER_RE = re.compile(r"⟦(\d+)⟧")
 
 
+
+def needs_translation(text):
+    """Indica si queda texto legible después de retirar códigos y etiquetas."""
+    if not isinstance(text, str) or not text:
+        return False
+    return bool(_LETTER.search(CODE_RE.sub("", text)))
+
 def default_placeholder(i):
     return "⟦%d⟧" % i
 
