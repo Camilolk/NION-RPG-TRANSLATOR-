@@ -5,6 +5,7 @@ from nion.codes import (compose_from_segments, mask, needs_translation, unmask)
 from nion.engine import Engine, EchoEngine, EngineError
 from nion.extract import find_data_dir, iter_entries, protected_names
 from nion.memory import Memory
+from nion.glossary import load_glossary, normalize_names
 from nion.pipeline import apply_translations, pending_texts, scan, translate_pending
 
 
@@ -109,8 +110,8 @@ class Tests(unittest.TestCase):
                                  "%1 is victorious!", "The Hero", "A brave hero."):
                     self.assertIn(expected, texts)
                 self.assertNotIn("Grant", texts)
-                self.assertNotIn("Elio", texts)
-                self.assertNotIn("Village Elder", texts)
+                self.assertIn("Elio", texts)  # nombre visible del hablante
+                self.assertNotIn("Village Elder", texts)  # identificador interno
                 self.assertNotIn("comment, do not translate", texts)
                 self.assertNotIn("editor only", texts)
 
@@ -120,7 +121,7 @@ class Tests(unittest.TestCase):
         names = protected_names(data_dir)
         self.assertIn("Grant", names)
         self.assertIn("Elio", names)
-        self.assertIn("Village Elder", names)
+        self.assertNotIn("Village Elder", names)
 
         memory = Memory(os.path.join(self.root, "names-memory.json"))
         _, entries = scan(root)
@@ -138,6 +139,52 @@ class Tests(unittest.TestCase):
         self.assertEqual(read(out + "/Actors.json")[1]["name"], "Grant")
         self.assertEqual(output["events"][1]["pages"][0]["list"][0]["parameters"][4], "Elio")
 
+    def test_glossary_normalizes_names_and_preserves_rpg_codes(self):
+        glossary = load_glossary()
+        self.assertEqual(
+            normalize_names(r"\\C[22]Грант habló con Элио", glossary),
+            r"\\C[22]Grant habló con Elio",
+        )
+        self.assertEqual(normalize_names("Охранник", glossary), "Охранник")
+
+    def test_russian_actor_names_and_descriptive_speakers(self):
+        root = os.path.join(self.root, "russian-game")
+        data_dir = make_game(root)
+        actors_path = os.path.join(data_dir, "Actors.json")
+        actors = read(actors_path)
+        actors[1]["name"] = "Грант"
+        write(actors_path, actors)
+
+        map_path = os.path.join(data_dir, "Map001.json")
+        game_map = read(map_path)
+        commands = game_map["events"][1]["pages"][0]["list"]
+        commands[0]["parameters"][4] = r"\\C[22]Элио"
+        commands.insert(1, {"code": 101, "indent": 0,
+                            "parameters": ["", 0, 0, 2, "Охранник"]})
+        commands.insert(2, {"code": 401, "indent": 0,
+                            "parameters": ["Грант встретил Элио."]})
+        write(map_path, game_map)
+
+        glossary = load_glossary()
+        names = protected_names(data_dir, glossary)
+        entries = list(iter_entries(data_dir))
+        self.assertIn("Охранник", [entry.text for entry in entries])
+        self.assertNotIn("Охранник", names)
+
+        memory = Memory(os.path.join(self.root, "russian-memory.json"))
+        translate_pending(entries, memory, EchoEngine(), "ru", "es",
+                          log=lambda *_: None, protected_terms=names, glossary=glossary)
+        out = os.path.join(self.root, "russian-out")
+        apply_translations(root, out, memory, glossary=glossary)
+
+        output_actors = read(os.path.join(out, "Actors.json"))
+        self.assertEqual(output_actors[1]["name"], "Grant")
+        output_map = read(os.path.join(out, "Map001.json"))
+        output_commands = output_map["events"][1]["pages"][0]["list"]
+        self.assertEqual(output_commands[0]["parameters"][4], r"\\C[22]Elio")
+        self.assertEqual(output_commands[1]["parameters"][4], "[ES] Охранник")
+        self.assertIn("Grant", output_commands[2]["parameters"][0])
+        self.assertIn("Elio", output_commands[2]["parameters"][0])
     def test_apply_never_touches_original(self):
         root = os.path.join(self.root, "g")
         d = make_game(root)
