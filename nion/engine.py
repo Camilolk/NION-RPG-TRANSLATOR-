@@ -240,6 +240,53 @@ class OpenRouterEngine(Engine):
     def translate_with_context(self, text, src, tgt, context):
         return self.translate_batch([text], src, tgt, contexts=[context])[0]
 
+    def _request_content(self, req):
+        """Reintenta fallos transitorios y respuestas vacías sin perder el texto."""
+        retryable_statuses = {429, 500, 502, 503, 504}
+        delays = (2, 5)
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                result = data["choices"][0]["message"]["content"]
+                if isinstance(result, str) and result.strip():
+                    return result.strip()
+                if attempt < 2:
+                    time.sleep(delays[attempt])
+                    continue
+                raise EngineError(
+                    "OpenRouter devolvió una respuesta vacía tras 3 intentos. "
+                    "El texto quedó pendiente y no se guardó."
+                )
+            except urllib.error.HTTPError as error:
+                if error.code in retryable_statuses and attempt < 2:
+                    retry_after = error.headers.get("Retry-After") if error.headers else None
+                    try:
+                        delay = min(15, max(0, float(retry_after))) if retry_after else delays[attempt]
+                    except (TypeError, ValueError):
+                        delay = delays[attempt]
+                    time.sleep(delay)
+                    continue
+                try:
+                    detail = error.read().decode("utf-8", "replace")[:300]
+                except Exception:
+                    detail = str(error.reason)
+                if error.code == 429:
+                    detail = "límite de solicitudes alcanzado. " + detail
+                raise EngineError("OpenRouter HTTP %d: %s" % (error.code, detail))
+            except urllib.error.URLError as error:
+                if attempt < 2:
+                    time.sleep(delays[attempt])
+                    continue
+                raise EngineError(
+                    "No se pudo conectar con OpenRouter tras 3 intentos: %s" % error.reason
+                )
+            except EngineError:
+                raise
+            except (KeyError, IndexError, TypeError, ValueError) as error:
+                raise EngineError("Respuesta de OpenRouter no válida: %s" % error)
+        raise EngineError("OpenRouter no pudo completar la solicitud.")
+
     def translate_batch(self, texts, src, tgt, strict=False, contexts=None):
         outputs = []
         for index, text in enumerate(texts):
@@ -273,29 +320,8 @@ class OpenRouterEngine(Engine):
                 },
                 method="POST",
             )
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as response:
-                    data = json.loads(response.read().decode("utf-8"))
-                result = data["choices"][0]["message"]["content"]
-                if not isinstance(result, str) or not result.strip():
-                    raise EngineError("OpenRouter devolvió una respuesta vacía.")
-                outputs.append(result.strip())
-            except EngineError:
-                raise
-            except urllib.error.HTTPError as error:
-                try:
-                    detail = error.read().decode("utf-8", "replace")[:300]
-                except Exception:
-                    detail = str(error.reason)
-                if error.code == 429:
-                    detail = "límite de solicitudes alcanzado. " + detail
-                raise EngineError("OpenRouter HTTP %d: %s" % (error.code, detail))
-            except urllib.error.URLError as error:
-                raise EngineError("No se pudo conectar con OpenRouter: %s" % error.reason)
-            except (KeyError, IndexError, TypeError, ValueError) as error:
-                raise EngineError("Respuesta de OpenRouter no válida: %s" % error)
+            outputs.append(self._request_content(req))
         return outputs
-
     def retry_masked(self, text, src, tgt):
         return self.translate_batch([text], src, tgt, strict=True)[0]
 
