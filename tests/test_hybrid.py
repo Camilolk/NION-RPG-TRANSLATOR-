@@ -104,7 +104,7 @@ class HybridEngineTests(unittest.TestCase):
     def test_changed_line_breaks_are_rejected(self):
         glossary = load_glossary()
         approved, issue = _approve_translation(
-            "A vest made of leather\\nhardened with glue.",
+            "A vest made of leather\nhardened with glue.",
             "Un chaleco hecho de cuero endurecido con pegamento.",
             "en", "es", glossary, [], None,
         )
@@ -114,11 +114,11 @@ class HybridEngineTests(unittest.TestCase):
     def test_preserved_line_breaks_are_accepted(self):
         glossary = load_glossary()
         approved, issue = _approve_translation(
-            "A vest made of leather\\nhardened with glue.",
-            "Un chaleco hecho de cuero\\nendurecido con pegamento.",
+            "A vest made of leather\nhardened with glue.",
+            "Un chaleco hecho de cuero\nendurecido con pegamento.",
             "en", "es", glossary, [], None,
         )
-        self.assertEqual(approved, "Un chaleco hecho de cuero\\nendurecido con pegamento.")
+        self.assertEqual(approved, "Un chaleco hecho de cuero\nendurecido con pegamento.")
         self.assertIsNone(issue)
 
     def test_normal_spanish_translation_is_not_rejected(self):
