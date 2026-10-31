@@ -51,13 +51,14 @@ class LlamaCppTests(unittest.TestCase):
         payload = json.loads(request.data.decode("utf-8"))
         prompt = payload["messages"][0]["content"]
         self.assertIn("español latinoamericano natural", prompt)
-        self.assertIn("persona y el número gramatical", prompt)
+        self.assertIn("concordancia de género y número", prompt)
         self.assertIn("tiempo verbal y la modalidad", prompt)
         self.assertIn("primera, segunda o tercera persona", prompt)
         self.assertNotIn("We should hurry", prompt)
         self.assertNotIn("Debemos apresurarnos", prompt)
         self.assertIn("[[NION_TOKEN_n]]", prompt)
-        self.assertEqual(payload["messages"][1]["content"], "We should hurry.")
+        self.assertIn("Idioma de origen: en. Idioma de destino: es.", payload["messages"][1]["content"])
+        self.assertIn("We should hurry.", payload["messages"][1]["content"])
 
     @patch("nion.engine.urllib.request.urlopen")
     def test_rpg_terminology_is_injected_into_spanish_prompt(self, mocked):
