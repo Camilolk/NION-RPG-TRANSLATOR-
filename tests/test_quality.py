@@ -56,7 +56,7 @@ class QualityTests(unittest.TestCase):
                          (text, None))
 
 
-    def test_pipeline_retries_then_applies_verified_correction(self):
+    def test_pipeline_applies_verified_correction_without_retry(self):
         class BadEngine(Engine):
             name = "bad-test"
             max_batch = 1
@@ -162,6 +162,13 @@ class QualityTests(unittest.TestCase):
 
     def test_verified_rpg_descriptions_correct_known_grammar_and_material(self):
         cases = {
+            "[General Equipment] Linen clothing with high\\nbreathability.": (
+                "[Equipamiento general] Ropa de lino con alta transpirabilidad."
+            ),
+            "A large, old shield that survived time. Has something inscribed but it has mostly faded away.": (
+                "Un escudo grande y antiguo que ha resistido el paso del tiempo. "
+                "Tiene algo grabado, pero casi se ha borrado."
+            ),
             "A vest made of tanned hide.": "Un chaleco hecho de cuero curtido.",
             "A vest made of leather hardened with glue.": (
                 "Un chaleco de cuero endurecido con pegamento."
