@@ -72,6 +72,9 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
             outputs = _translate_exact(engine, [masked for masked, _ in plan], src, tgt)
             for original, (_, tokens), translated in zip(chunk, plan, outputs):
                 restored = unmask(translated, tokens, engine.placeholder)
+                if restored is None and hasattr(engine, "retry_masked"):
+                    retried = engine.retry_masked(masked, src, tgt)
+                    restored = unmask(retried, tokens, engine.placeholder)
                 if restored is None:
                     leftovers.append(original)
                 else:
