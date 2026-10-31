@@ -72,7 +72,7 @@ def terminology_issues(source, translated, glossary, src, tgt):
     issues = []
     covered = []
     for original, expected in sorted(terms.items(), key=lambda item: -len(item[0])):
-        match = re.search(r"(?<!\\w)" + re.escape(original) + r"(?!\\w)", source, re.IGNORECASE)
+        match = re.search(r"(?<!\w)" + re.escape(original) + r"(?!\w)", source, re.IGNORECASE)
         if not match:
             continue
         # Una expresión compuesta prevalece sobre sus componentes: "iron steel"
