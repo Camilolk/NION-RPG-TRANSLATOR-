@@ -1,5 +1,11 @@
+import os
+import tempfile
 import unittest
+from types import SimpleNamespace
 
+from nion.engine import Engine
+from nion.memory import Memory
+from nion.pipeline import translate_pending
 from nion.quality import quality_issue, verified_correction
 
 
@@ -47,6 +53,33 @@ class QualityTests(unittest.TestCase):
                          (text, None))
         self.assertEqual(verified_correction("I should hurry.", text, "es", "en"),
                          (text, None))
+
+
+    def test_pipeline_retries_then_applies_verified_correction(self):
+        class BadEngine(Engine):
+            name = "bad-test"
+            max_batch = 1
+
+            def __init__(self):
+                self.retry_calls = 0
+
+            def translate_batch(self, texts, src, tgt):
+                return ["Debemos acelerar."]
+
+            def retry_masked(self, text, src, tgt):
+                self.retry_calls += 1
+                return "Debemos acelerar."
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = BadEngine()
+            memory = Memory(os.path.join(directory, "memory.json"))
+            entry = SimpleNamespace(text="We should hurry.")
+            logs = []
+            translate_pending([entry], memory, engine, "en", "es",
+                              log=logs.append, protected_terms=[])
+            self.assertEqual(engine.retry_calls, 1)
+            self.assertEqual(memory["We should hurry."], "Deberíamos darnos prisa.")
+            self.assertTrue(any("corrección verificada" in line for line in logs))
 
     def test_normalizes_case_spacing_and_final_punctuation(self):
         corrected, reason = verified_correction(
