@@ -113,7 +113,7 @@ class HybridEngineTests(unittest.TestCase):
             payload = json.loads(request.data.decode("utf-8"))
             user_message = payload["messages"][1]["content"]
             self.assertIn("Nombre original: Linen Clothing", user_message)
-            self.assertIn("Nombre traducido: Ropa de lino", user_message)
+            self.assertNotIn("Nombre traducido:", user_message)
 
     def test_spanish_rpg_prompt_explains_equipment_context(self):
         prompt = LlamaCppEngine._system_prompt("es")
