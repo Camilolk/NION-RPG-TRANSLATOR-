@@ -85,18 +85,40 @@ class LlamaCppEngine(Engine):
             self.url = base + "/v1/chat/completions"
         self.timeout = timeout
 
+    @staticmethod
+    def _system_prompt(tgt):
+        prompt = (
+            "Eres traductor y editor profesional de localización de videojuegos RPG. "
+            "Traduce el significado completo con naturalidad, precisión y coherencia "
+            "con el contexto de un diálogo de fantasía. Mantén el tono y la intención "
+            "del personaje. Escribe frases gramaticalmente correctas y fluidas; evita "
+            "calcos, construcciones literales y palabras que no encajen en el contexto. "
+            "No inventes información ni omitas partes del original. "
+            "Responde únicamente con el texto traducido, sin explicaciones, etiquetas "
+            "ni comillas. Conserva literalmente todos los marcadores ⟦n⟧: no los "
+            "cambies, elimines, dupliques ni reordenes. No traduzcas los nombres propios "
+            "protegidos por esos marcadores."
+        )
+        language = (tgt or "").lower().replace("_", "-")
+        if language == "es" or language.startswith("es-"):
+            prompt += (
+                " Usa español latinoamericano neutro, natural y actual. "
+                "Cuida especialmente la concordancia de sujeto, verbo y pronombres. "
+                "Si el original habla en primera persona del plural (we), conserva "
+                "esa persona verbal (nosotros/nosotras o la forma verbal correspondiente). "
+                "Por ejemplo, 'We should hurry' debe expresar 'Debemos apresurarnos', "
+                "no 'Debe irnos'. Evita expresiones rígidas como 'bosque norteño' "
+                "cuando 'bosque del norte' resulte más natural."
+            )
+        return prompt
+
     def translate_batch(self, texts, src, tgt):
         outputs = []
         for text in texts:
             payload = {
                 "model": "local-model",
                 "messages": [
-                    {"role": "system", "content":
-                     "Eres traductor profesional de videojuegos RPG Maker. Traduce fielmente "
-                     "con lenguaje natural. Responde solo con la traducción, sin explicaciones "
-                     "ni comillas. Conserva literalmente todos los marcadores ⟦n⟧: no los "
-                     "cambies, elimines, dupliques ni reordenes. No traduzcas nombres propios "
-                     "protegidos por esos marcadores."},
+                    {"role": "system", "content": self._system_prompt(tgt)},
                     {"role": "user", "content":
                      "Idioma origen: %s\nIdioma destino: %s\nTexto:\n%s" % (src, tgt, text)}
                 ],
