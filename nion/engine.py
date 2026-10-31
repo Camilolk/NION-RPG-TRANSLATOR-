@@ -98,7 +98,7 @@ class LlamaCppEngine(Engine):
         language = (tgt or "").lower().replace("_", "-")
         if language == "es" or language.startswith("es-"):
             prompt += (
-                " Usa español latinoamericano natural. Mantén la misma persona "
+                " El idioma destino es español. Usa español latinoamericano natural. Mantén la misma persona "
                 "gramatical del original: 'we' corresponde a 'nosotros'. "
                 "'We should hurry' debe expresar 'Debemos apresurarnos'. "
                 "Para indicar ubicación, prefiere 'del norte' cuando sea natural "
@@ -106,7 +106,7 @@ class LlamaCppEngine(Engine):
             )
         if strict:
             prompt += (
-                " REINTENTO ESTRICTO: copia cada marcador [[NION_TOKEN_n]] "
+                " MODO DE REINTENTO ESTRICTO: copia cada marcador [[NION_TOKEN_n]] "
                 "exactamente una vez y en el mismo orden. No alteres los marcadores. "
                 "Traduce la frase completa sin resumir ni omitir información."
             )
@@ -123,8 +123,7 @@ class LlamaCppEngine(Engine):
                 "model": "local-model",
                 "messages": [
                     {"role": "system", "content": self._system_prompt(tgt, strict=strict)},
-                    {"role": "user", "content":
-                     "Idioma origen: %s\nIdioma destino: %s\nTexto:\n%s" % (src, tgt, text)}
+                    {"role": "user", "content": text}
                 ],
                 "temperature": 0.1,
                 "max_tokens": min(1024, max(128, len(text) * 3)),
