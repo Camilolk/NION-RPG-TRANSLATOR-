@@ -64,6 +64,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     pending = pending_texts(entries, memory, protected_terms, glossary)
     log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
     leftovers = []
+    rejected = []
 
     if engine.supports_masking:
         done = 0
@@ -95,6 +96,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                                 log("  control de calidad: se aplicó una corrección verificada.")
                                 restored = corrected
                             if quality_issue(original, restored, src, tgt, glossary):
+                                rejected.append(original)
                                 restored = None
                 elif hasattr(engine, "retry_masked"):
                     retried = engine.retry_masked(masked, src, tgt)
@@ -102,7 +104,8 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                     if restored is not None and not names_preserved(prepared, restored, protected_terms):
                         restored = None
                 if restored is None:
-                    leftovers.append(original)
+                    if original not in rejected:
+                        leftovers.append(original)
                 else:
                     memory.set(original, restored)
             memory.save()
@@ -131,6 +134,8 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
             composed = compose_from_segments(prepared_texts[text], memory, ())
             if composed is not None:
                 memory.set(text, composed)
+    if rejected:
+        log("  rechazados por control de calidad: %d (no se guardaron en memoria)" % len(rejected))
     memory.save()
 
 
