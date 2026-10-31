@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from nion.engine import EngineError, HybridEngine, OpenRouterEngine
+from nion.engine import EngineError, HybridEngine, OpenRouterEngine, LlamaCppEngine
 import nion.cli  # noqa: F401 - verifies the command-line module remains importable
 from nion.pipeline import _approve_translation
 from nion.glossary import load_glossary
@@ -93,6 +93,33 @@ class HybridEngineTests(unittest.TestCase):
         )
         self.assertIsNone(approved)
         self.assertIn("otro sistema de escritura", issue)
+
+
+    def test_spanish_rpg_prompt_explains_equipment_context(self):
+        prompt = LlamaCppEngine._system_prompt("es")
+        self.assertIn("'linen' es el tejido lino", prompt)
+        self.assertIn("'vest' en una pieza de armadura o ropa", prompt)
+        self.assertIn("FORMATO: conserva exactamente los saltos de línea", prompt)
+
+    def test_changed_line_breaks_are_rejected(self):
+        glossary = load_glossary()
+        approved, issue = _approve_translation(
+            "A vest made of leather\\nhardened with glue.",
+            "Un chaleco hecho de cuero endurecido con pegamento.",
+            "en", "es", glossary, [], None,
+        )
+        self.assertIsNone(approved)
+        self.assertIn("saltos de línea", issue)
+
+    def test_preserved_line_breaks_are_accepted(self):
+        glossary = load_glossary()
+        approved, issue = _approve_translation(
+            "A vest made of leather\\nhardened with glue.",
+            "Un chaleco hecho de cuero\\nendurecido con pegamento.",
+            "en", "es", glossary, [], None,
+        )
+        self.assertEqual(approved, "Un chaleco hecho de cuero\\nendurecido con pegamento.")
+        self.assertIsNone(issue)
 
     def test_normal_spanish_translation_is_not_rejected(self):
         glossary = load_glossary()
