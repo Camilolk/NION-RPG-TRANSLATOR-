@@ -50,9 +50,10 @@ class LlamaCppTests(unittest.TestCase):
         request = mocked.call_args.args[0]
         payload = json.loads(request.data.decode("utf-8"))
         prompt = payload["messages"][0]["content"]
-        self.assertIn("español latinoamericano neutro", prompt)
-        self.assertIn("concordancia de sujeto, verbo y pronombres", prompt)
+        self.assertIn("español latinoamericano natural", prompt)
+        self.assertIn("misma persona gramatical", prompt)
         self.assertIn("Debemos apresurarnos", prompt)
+        self.assertIn("del norte", prompt)
         self.assertIn("[[NION_TOKEN_n]]", prompt)
 
     @patch("nion.engine.urllib.request.urlopen")
