@@ -30,13 +30,13 @@ Desde la raíz del repositorio:
 
 Después ejecuta NION con `--engine llamacpp`. La URL predeterminada es `http://127.0.0.1:8080`; se puede cambiar con `--url` o `NION_LLAMACPP_URL`. El servidor debe permanecer activo. Las peticiones al servidor local no necesitan clave API ni conexión a Internet.
 
-El motor local envía un texto por petición para mantener la correspondencia entre entrada y salida. NION enmascara códigos RPG Maker y nombres protegidos antes de enviarlos y los restaura después. Si el modelo altera los marcadores, el pipeline recurre a traducir segmentos. Revisa la calidad antes de usar el resultado en un juego.
+El motor local envía un texto por petición para mantener la correspondencia entre entrada y salida. NION enmascara códigos RPG Maker y nombres protegidos antes de enviarlos y los restaura después. Si el modelo altera los marcadores, el pipeline recurre a traducir segmentos. NION comprueba marcadores, nombres protegidos, términos del glosario y correcciones exactas conocidas antes de aceptar una traducción. Estos controles reducen errores frecuentes, pero no detectan todos los problemas de significado o gramática: revisa una muestra antes de usar el resultado en un juego.
 
 La carpeta del juego puede ser la raíz que contiene data/ (MZ), www/data/ (MV), o directamente data/.
 
 ## Flujo seguro
 1. `scan` cuenta los textos sin llamar a ningún motor.
-2. `translate` guarda traducciones en una memoria JSON y la actualiza por lote para permitir reanudación.
+2. `translate` traduce y valida antes de guardar en la memoria JSON. Los códigos RPG Maker y los nombres confirmados se protegen también en la ruta por segmentos (usada por DeepL o como respaldo). Las traducciones con errores verificables del glosario no se guardan como traducciones completas; la memoria se actualiza por lote para permitir reanudación.
 3. `apply` solo exporta cuando todos los textos detectados tienen traducción. Crea una carpeta nueva y nunca modifica los archivos originales.
 4. Si la carpeta de salida ya existe, NION se detiene para evitar mezclar archivos antiguos.
 
