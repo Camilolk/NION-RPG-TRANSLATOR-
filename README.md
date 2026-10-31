@@ -1,44 +1,48 @@
-# NION core (v0.1.0)
+# NION RPG Translator — núcleo v0.1.1
 
-Núcleo del traductor de RPG Maker MV/MZ. **Solo biblioteca estándar de Python** (sin pip, sin PyTorch),
-pensado para Termux/ARM64. Nunca modifica el juego original: escribe una COPIA de `data`.
+Núcleo inicial para traducir juegos RPG Maker MV y MZ. Está escrito con la biblioteca estándar de Python: no requiere pip, PyTorch ni modelos descargados.
 
-## Uso (desde la carpeta que contiene `nion/`)
+> Estado: prototipo en revisión. Las pruebas automáticas no sustituyen la validación en Termux/Android ni una prueba con un juego real.
 
-    python -m nion scan      JUEGO --lang es                    # cuenta, no gasta nada
-    python -m nion translate JUEGO --lang es --engine deepl --key CLAVE:fx
-    python -m nion apply     JUEGO --lang es                    # crea JUEGO/data_es
+## Estructura
+- nion/: paquete Python del núcleo.
+- tests/: pruebas automáticas.
+- CHANGES_FOR_CHATGPT.md: historial y traspaso de trabajo.
+- nion-core.zip: archivo original recibido; se conserva como referencia.
 
-`JUEGO` es la raíz del juego (MZ: `data/`, MV: `www/data/`) o la propia carpeta `data`.
-La memoria se guarda en `nion_memory_<lang>.json`; si se corta, se vuelve a ejecutar `translate`.
-`--engine echo` no traduce de verdad (prueba de tuberías, sin red).
+## Requisitos
+- Python 3.9 o superior recomendado.
+- Android con Termux para la validación objetivo.
+- Para DeepL: una clave API válida. No guardes claves en el repositorio.
 
-## Piezas
+## Uso
+Ejecuta desde la raíz del repositorio:
 
-| Archivo | Qué hace |
-|---|---|
-| `nion/codes.py` | detecta y protege códigos (`\C[2]`, `\V[1]`, `%1`, `<tags>`...) |
-| `nion/extract.py` | localiza los textos traducibles de MV y MZ, con su ruta exacta en el JSON |
-| `nion/memory.py` | memoria de traducción (JSON, guardado atómico) |
-| `nion/engine.py` | motores intercambiables: `echo`, `deepl`. Aquí irá el motor offline |
-| `nion/pipeline.py` | escanear -> traducir por lotes (reanudable) -> aplicar a una copia |
-| `nion/cli.py` | línea de comandos |
+    python -m nion scan RUTA_DEL_JUEGO --lang es
+    python -m nion translate RUTA_DEL_JUEGO --lang es --engine echo
+    python -m nion apply RUTA_DEL_JUEGO --lang es
 
-## Decisiones de diseño
+echo solo comprueba el flujo; no traduce. Para DeepL, define NION_DEEPL_KEY en el entorno o usa --key. No escribas la clave en comandos que queden guardados en el historial.
 
-- Un motor es una clase con `translate_batch()`. Si falla lanza `EngineError`: **nunca falla en silencio**.
-- Si el motor respeta marcadores (`supports_masking`), los códigos se enmascaran. Si el motor pierde un
-  marcador, ese texto se retraduce por trozos (el texto entre códigos). DeepL va directo por trozos.
-- La memoria es compatible con los diccionarios `cache_deepl*.json` anteriores (trozo -> traducción).
-- Los archivos del juego se escriben solo tras tener las traducciones, y de forma atómica.
+La carpeta del juego puede ser la raíz que contiene data/ (MZ), la raíz que contiene www/data/ (MV), o directamente la carpeta data/.
+
+## Flujo seguro
+1. scan cuenta los textos sin llamar a ningún motor.
+2. translate guarda traducciones en una memoria JSON y la actualiza por lote para permitir reanudación.
+3. apply solo exporta cuando todos los textos detectados tienen traducción. Crea una carpeta nueva y nunca modifica los archivos originales.
+4. Si la carpeta de salida ya existe, el programa se detiene para evitar mezclar archivos de una ejecución anterior.
+
+La memoria y las copias de juegos son datos locales; no deben subirse a GitHub.
 
 ## Pruebas
-
     python -m unittest discover -s tests -v
 
-## Límites conocidos (v0.1.0)
+## Protección de códigos
+El núcleo intenta preservar códigos como \C[2], \V[1], \N[1], %1 y etiquetas compatibles. Los motores deben devolver exactamente un resultado de texto por entrada; una respuesta incompleta se trata como error.
 
-- Cada línea de diálogo (código 401) se traduce por separado. Falta traducir el bloque entero para más contexto.
-- No toca plugins (`js/plugins.js`), comandos de plugin (357), ni imágenes con texto.
-- Solo motores `echo` y `deepl`. El motor offline depende de la prueba de viabilidad en Termux.
-- No hay interfaz web todavía.
+## Limitaciones conocidas
+- Cada línea de diálogo (comando 401) se procesa por separado; falta agrupar bloques consecutivos.
+- No procesa plugins, comandos de plugin, imágenes con texto ni todos los campos posibles de RPG Maker.
+- Motores incluidos: echo y deepl. Aún no hay motor offline; su viabilidad debe medirse en Android.
+- No hay interfaz web.
+- DeepL no ha sido validado contra la API real en este proyecto.
