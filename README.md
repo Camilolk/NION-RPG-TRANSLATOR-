@@ -21,11 +21,12 @@ Desde la raíz del repositorio:
 
     python -m nion scan RUTA_DEL_JUEGO --lang es
     python -m nion translate RUTA_DEL_JUEGO --lang es --engine echo
+    python -m nion translate RUTA_DEL_JUEGO --lang es --engine hybrid --limit 10
     python -m nion translate RUTA_DEL_JUEGO --lang es --engine hybrid
     python -m nion translate RUTA_DEL_JUEGO --lang es --engine llamacpp
     python -m nion apply RUTA_DEL_JUEGO --lang es
 
-`echo` solo comprueba el flujo; no traduce. El motor predeterminado es `hybrid`: aplica primero equivalencias exactas del glosario, usa OpenRouter si existe `NION_OPENROUTER_KEY` y recurre a llama.cpp cuando la nube falla o no está configurada. Para OpenRouter, define `NION_OPENROUTER_KEY`; el modelo predeterminado es `openrouter/free` y puede cambiarse con `NION_OPENROUTER_MODEL` o `--model`. Los modelos gratuitos tienen límites de uso y disponibilidad variables. Los textos enviados a OpenRouter salen del teléfono y se procesan por el proveedor; no incluyas datos privados del juego si no aceptas ese envío. Para DeepL, define `NION_DEEPL_KEY` o usa `--key`. Para llama.cpp, inicia el servidor en otra sesión de Termux:
+`echo` solo comprueba el flujo; no traduce. El motor predeterminado es `hybrid`: aplica primero equivalencias exactas del glosario, usa OpenRouter si existe `NION_OPENROUTER_KEY` y recurre a llama.cpp cuando la nube falla o no está configurada. `--limit 10` permite una ejecución piloto de hasta 10 textos únicos sin traducir el resto; omite `--limit` para continuar sin límite. Para OpenRouter, define `NION_OPENROUTER_KEY`; el modelo predeterminado es `openrouter/free` y puede cambiarse con `NION_OPENROUTER_MODEL` o `--model`. Los modelos gratuitos tienen límites de uso y disponibilidad variables. Los textos enviados a OpenRouter salen del teléfono y se procesan por el proveedor; no incluyas datos privados del juego si no aceptas ese envío. Para DeepL, define `NION_DEEPL_KEY` o usa `--key`. Para llama.cpp, inicia el servidor en otra sesión de Termux:
 
     llama-server -m RUTA_DEL_MODELO.gguf -c 2048 --host 127.0.0.1 --port 8080
 
