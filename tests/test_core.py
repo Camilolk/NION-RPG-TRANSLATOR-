@@ -161,7 +161,7 @@ class Tests(unittest.TestCase):
         mem = Memory(os.path.join(self.root, "m.json"))
         _, entries = scan(root)
         translate_pending(entries, mem, EchoEngine(), "en", "es", log=lambda *_: None,
-                          protected_terms=protected_names(root))
+                          protected_terms=protected_names(root + "/data"))
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
