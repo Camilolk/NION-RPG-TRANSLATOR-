@@ -41,7 +41,7 @@ La memoria y las copias de juegos son datos locales; no deben subirse a GitHub.
 El núcleo intenta preservar códigos como \C[2], \V[1], \N[1], %1 y etiquetas compatibles. Los motores deben devolver exactamente un resultado de texto por entrada; una respuesta incompleta se trata como error.
 
 ## Limitaciones conocidas
-- Cada línea de diálogo (comando 401) se procesa por separado; falta agrupar bloques consecutivos.
+- Cada línea de diálogo (comando 401) se procesa por separado; falta agrupar bloques consecutivos y añadir un análisis visual de desbordamiento adaptado a la configuración real de cada juego. NION no debe cambiar el tamaño original de la fuente.
 - No procesa plugins, comandos de plugin, imágenes con texto ni todos los campos posibles de RPG Maker.
 - Motores incluidos: echo y deepl. Aún no hay motor offline; su viabilidad debe medirse en Android.
 - No hay interfaz web.
