@@ -118,6 +118,7 @@ class HybridEngineTests(unittest.TestCase):
         self.assertIn("'linen' es el tejido lino", prompt)
         self.assertIn("'vest' en una pieza de armadura o ropa", prompt.lower())
         self.assertIn("FORMATO: conserva exactamente los saltos de línea", prompt)
+        self.assertIn("no traduzcas ni reproduzcas ese contexto", prompt)
 
     def test_changed_line_breaks_are_rejected(self):
         glossary = load_glossary()
