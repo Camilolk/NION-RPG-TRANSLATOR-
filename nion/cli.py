@@ -23,11 +23,16 @@ def main(argv=None):
     common(scan_parser)
     translate_parser = sub.add_parser("translate", help="traduce lo que falta y lo guarda en la memoria")
     common(translate_parser)
-    translate_parser.add_argument("--engine", default="deepl", help="echo | deepl | llamacpp")
+    translate_parser.add_argument("--engine", default="hybrid", help="hybrid | openrouter | llamacpp | deepl | echo")
     translate_parser.add_argument("--key", default=os.environ.get("NION_DEEPL_KEY"))
     translate_parser.add_argument("--url", default=os.environ.get(
         "NION_LLAMACPP_URL", "http://127.0.0.1:8080"),
         help="URL base del servidor llama.cpp")
+    translate_parser.add_argument("--openrouter-key", default=os.environ.get("NION_OPENROUTER_KEY"),
+                                   help="clave OpenRouter (o variable NION_OPENROUTER_KEY)")
+    translate_parser.add_argument("--model", default=os.environ.get(
+        "NION_OPENROUTER_MODEL", "openrouter/free"),
+        help="modelo OpenRouter; por defecto openrouter/free")
     translate_parser.add_argument("--src", default="en")
     apply_parser = sub.add_parser("apply", help="crea una COPIA completa traducida; nunca toca el original")
     common(apply_parser)
@@ -46,7 +51,7 @@ def main(argv=None):
             print("Nombres protegidos:", len(names))
             print("Por traducir:", len(todo), "textos,", sum(map(len, todo)), "caracteres")
         elif args.cmd == "translate":
-            engine = get_engine(args.engine, args.key, args.url)
+            engine = get_engine(args.engine, args.key, args.url, glossary=glossary,\n                                model=args.model, openrouter_key=args.openrouter_key)
             translate_pending(entries, memory, engine, args.src, args.lang,
                               protected_terms=names, glossary=glossary)
             print("TERMINADO. Memoria:", memory.path)
