@@ -104,14 +104,98 @@ class HybridEngineTests(unittest.TestCase):
 
     @patch("nion.engine.time.sleep")
     @patch("nion.engine.urllib.request.urlopen")
-    def test_openrouter_rejects_after_three_empty_responses(self, mocked, sleep):
-        empty = FakeResponse({"choices": [{"message": {"content": ""}}]})
-        mocked.side_effect = [empty, empty, empty]
+    def test_openrouter_stops_after_two_unclassified_empty_responses(self, mocked, sleep):
+        empty = FakeResponse({"choices": [{
+            "message": {"content": None}, "finish_reason": "stop"
+        }]})
+        mocked.side_effect = [empty, empty]
         engine = OpenRouterEngine(key="test-secret", model="test/model")
-        with self.assertRaisesRegex(EngineError, "vacía tras 3 intentos"):
+        with self.assertRaisesRegex(EngineError, "contenido vacío o nulo"):
             engine.translate_batch(["Hard Leather"], "en", "es")
-        self.assertEqual(mocked.call_count, 3)
-        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(mocked.call_count, 2)
+        self.assertEqual(sleep.call_count, 1)
+
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_nemotron_profile_disables_reasoning_and_reserves_output_tokens(self, mocked):
+        mocked.return_value = FakeResponse({"choices": [{
+            "message": {"content": "Cuero endurecido"}, "finish_reason": "stop"
+        }]})
+        engine = OpenRouterEngine(
+            key="test-secret", model="nvidia/nemotron-3.5-super-vl:free"
+        )
+        self.assertEqual(
+            engine.translate_batch(["Hard Leather"], "en", "es"),
+            ["Cuero endurecido"],
+        )
+        payload = json.loads(mocked.call_args.args[0].data.decode("utf-8"))
+        self.assertEqual(payload["reasoning"], {"enabled": False})
+        self.assertEqual(payload["max_tokens"], 512)
+
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_openrouter_expands_budget_after_finish_reason_length(self, mocked):
+        mocked.side_effect = [
+            FakeResponse({
+                "choices": [{
+                    "message": {"content": None, "reasoning": "internal"},
+                    "finish_reason": "length",
+                }],
+                "usage": {
+                    "prompt_tokens": 20,
+                    "completion_tokens": 512,
+                    "completion_tokens_details": {"reasoning_tokens": 500},
+                },
+            }),
+            FakeResponse({"choices": [{
+                "message": {"content": "Cuero endurecido"},
+                "finish_reason": "stop",
+            }]}),
+        ]
+        engine = OpenRouterEngine(
+            key="test-secret", model="nvidia/nemotron-3.5-super-vl:free"
+        )
+        self.assertEqual(
+            engine.translate_batch(["Hard Leather"], "en", "es"),
+            ["Cuero endurecido"],
+        )
+        first = json.loads(mocked.call_args_list[0].args[0].data.decode("utf-8"))
+        second = json.loads(mocked.call_args_list[1].args[0].data.decode("utf-8"))
+        self.assertEqual(first["max_tokens"], 512)
+        self.assertEqual(second["max_tokens"], 1024)
+
+    @patch("nion.engine.time.sleep")
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_openrouter_identifies_reasoning_without_visible_content(self, mocked, sleep):
+        response = FakeResponse({
+            "choices": [{
+                "message": {"content": None, "reasoning": "reasoning trace"},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "completion_tokens": 64,
+                "completion_tokens_details": {"reasoning_tokens": 64},
+            },
+        })
+        mocked.side_effect = [response, response]
+        engine = OpenRouterEngine(key="test-secret", model="test/model")
+        with self.assertRaisesRegex(EngineError, "razonamiento sin contenido visible"):
+            engine.translate_batch(["Hard Leather"], "en", "es")
+        self.assertEqual(mocked.call_count, 2)
+
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_openrouter_extracts_text_from_multimodal_content_blocks(self, mocked):
+        mocked.return_value = FakeResponse({"choices": [{
+            "message": {"content": [
+                {"type": "image", "image_url": {"url": "data:image/png;base64,hidden"}},
+                {"type": "text", "text": "Cuero endurecido"},
+            ]},
+            "finish_reason": "stop",
+        }]})
+        engine = OpenRouterEngine(key="test-secret", model="test/model")
+        self.assertEqual(
+            engine.translate_batch(["Hard Leather"], "en", "es"),
+            ["Cuero endurecido"],
+        )
+
 
     def test_cjk_contamination_is_rejected_for_spanish(self):
         glossary = load_glossary()
