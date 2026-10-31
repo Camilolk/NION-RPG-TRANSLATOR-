@@ -1,5 +1,6 @@
 """Motores de traducción intercambiables."""
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -168,7 +169,167 @@ class LlamaCppEngine(Engine):
         return outputs
 
 
-def get_engine(name, key=None, url=None):
+
+
+class OpenRouterEngine(Engine):
+    """Motor remoto compatible con OpenAI; usa openrouter/free por defecto."""
+    name = "openrouter"
+    max_batch = 1
+    supports_masking = True
+
+    def __init__(self, key=None, model=None, timeout=120):
+        self.key = (key or os.environ.get("NION_OPENROUTER_KEY") or "").strip()
+        if not self.key:
+            raise EngineError(
+                "Falta NION_OPENROUTER_KEY para usar OpenRouter. "
+                "Configura la clave localmente; nunca la guardes en Git."
+            )
+        self.model = (model or os.environ.get(
+            "NION_OPENROUTER_MODEL", "openrouter/free"
+        )).strip()
+        self.url = "https://openrouter.ai/api/v1/chat/completions"
+        self.timeout = timeout
+
+    def translate_batch(self, texts, src, tgt, strict=False):
+        outputs = []
+        for text in texts:
+            system = LlamaCppEngine._system_prompt(tgt, strict=strict)
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content":
+                     "Idioma de origen: %s. Idioma de destino: %s.\nTexto a traducir:\n%s"
+                     % (src, tgt, text)},
+                ],
+                "temperature": 0.15,
+                "max_tokens": min(1200, max(160, len(text) * 4)),
+            }
+            req = urllib.request.Request(
+                self.url,
+                data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={
+                    "Authorization": "Bearer " + self.key,
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://github.com/Camilolk/NION-RPG-TRANSLATOR-",
+                    "X-Title": "NION RPG Translator",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                result = data["choices"][0]["message"]["content"]
+                if not isinstance(result, str) or not result.strip():
+                    raise EngineError("OpenRouter devolvió una respuesta vacía.")
+                outputs.append(result.strip())
+            except EngineError:
+                raise
+            except urllib.error.HTTPError as error:
+                try:
+                    detail = error.read().decode("utf-8", "replace")[:300]
+                except Exception:
+                    detail = str(error.reason)
+                if error.code == 429:
+                    detail = "límite de solicitudes alcanzado. " + detail
+                raise EngineError("OpenRouter HTTP %d: %s" % (error.code, detail))
+            except urllib.error.URLError as error:
+                raise EngineError("No se pudo conectar con OpenRouter: %s" % error.reason)
+            except (KeyError, IndexError, TypeError, ValueError) as error:
+                raise EngineError("Respuesta de OpenRouter no válida: %s" % error)
+        return outputs
+
+    def retry_masked(self, text, src, tgt):
+        return self.translate_batch([text], src, tgt, strict=True)[0]
+
+
+class HybridEngine(Engine):
+    """Reglas exactas primero, nube después y llama.cpp como respaldo local."""
+    name = "hybrid"
+    max_batch = 1
+    supports_masking = True
+
+    def __init__(self, glossary=None, openrouter_key=None, model=None,
+                 local_url="http://127.0.0.1:8080"):
+        self.terms = {}
+        if isinstance(glossary, dict):
+            raw_terms = glossary.get("terms", {})
+            if isinstance(raw_terms, dict):
+                self.terms = {
+                    str(source).casefold(): str(target)
+                    for source, target in raw_terms.items()
+                    if isinstance(source, str) and isinstance(target, str)
+                }
+        self.cloud = None
+        key = openrouter_key or os.environ.get("NION_OPENROUTER_KEY")
+        if key:
+            self.cloud = OpenRouterEngine(key=key, model=model)
+        self.local = LlamaCppEngine(local_url)
+
+    def _rule_translation(self, text):
+        # Conserva el prefijo decorativo de categorías como "-----Armors".
+        prefix = text[:len(text) - len(text.lstrip("-"))]
+        body = text[len(prefix):]
+        target = self.terms.get(body.strip().casefold())
+        if target is None:
+            return None
+        return prefix + target
+
+    def translate_batch(self, texts, src, tgt):
+        outputs = []
+        for text in texts:
+            ruled = self._rule_translation(text)
+            if ruled is not None:
+                outputs.append(ruled)
+                continue
+
+            cloud_error = None
+            if self.cloud is not None:
+                try:
+                    outputs.extend(self.cloud.translate_batch([text], src, tgt))
+                    continue
+                except EngineError as error:
+                    cloud_error = error
+
+            try:
+                outputs.extend(self.local.translate_batch([text], src, tgt))
+            except EngineError as local_error:
+                if cloud_error is not None:
+                    raise EngineError(
+                        "Fallaron nube y motor local. Nube: %s | Local: %s"
+                        % (cloud_error, local_error)
+                    )
+                raise
+        return outputs
+
+    def retry_masked(self, text, src, tgt):
+        return self.translate_batch([text], src, tgt)[0]
+
+
+def get_engine(name, key=None, url=None, glossary=None, model=None,
+               openrouter_key=None):
+    if name == "echo":
+        return EchoEngine()
+    if name == "deepl":
+        return DeepLEngine(key)
+    if name == "llamacpp":
+        return LlamaCppEngine(url or "http://127.0.0.1:8080")
+    if name == "openrouter":
+        return OpenRouterEngine(
+            key=openrouter_key or key, model=model
+        )
+    if name == "hybrid":
+        return HybridEngine(
+            glossary=glossary,
+            openrouter_key=openrouter_key,
+            model=model,
+            local_url=url or "http://127.0.0.1:8080",
+        )
+    raise EngineError(
+        "Motor desconocido: %s (disponibles: echo, deepl, llamacpp, "
+        "openrouter, hybrid)" % name
+    )
+
     if name == "echo":
         return EchoEngine()
     if name == "deepl":
