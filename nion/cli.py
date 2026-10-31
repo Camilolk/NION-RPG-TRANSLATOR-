@@ -34,6 +34,8 @@ def main(argv=None):
         "NION_OPENROUTER_MODEL", "openrouter/free"),
         help="modelo OpenRouter; por defecto openrouter/free")
     translate_parser.add_argument("--src", default="en")
+    translate_parser.add_argument("--limit", type=int, default=0,
+                                   help="limita la ejecución a N textos únicos; 0 = sin límite")
     apply_parser = sub.add_parser("apply", help="crea una COPIA completa traducida; nunca toca el original")
     common(apply_parser)
     apply_parser.add_argument("--out", help="carpeta de salida (por defecto <data>_<lang>)")
@@ -51,6 +53,14 @@ def main(argv=None):
             print("Nombres protegidos:", len(names))
             print("Por traducir:", len(todo), "textos,", sum(map(len, todo)), "caracteres")
         elif args.cmd == "translate":
+            if args.limit < 0:
+                raise ValueError("--limit no puede ser negativo.")
+            if args.limit:
+                selected = set(pending_texts(
+                    entries, memory, names, glossary, src=args.src, tgt=args.lang
+                )[:args.limit])
+                entries = [entry for entry in entries if entry.text in selected]
+                print("Modo de muestra: máximo %d textos únicos." % len(selected))
             engine = get_engine(args.engine, args.key, args.url, glossary=glossary,
                                 model=args.model, openrouter_key=args.openrouter_key)
             translate_pending(entries, memory, engine, args.src, args.lang,
