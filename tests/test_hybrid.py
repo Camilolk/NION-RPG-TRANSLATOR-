@@ -95,6 +95,24 @@ class HybridEngineTests(unittest.TestCase):
         self.assertIn("otro sistema de escritura", issue)
 
 
+
+    def test_openrouter_context_is_included_in_user_message(self):
+        mocked = None
+        with patch("nion.engine.urllib.request.urlopen") as mocked:
+            mocked.return_value = FakeResponse({
+                "choices": [{"message": {"content": "Ropa de lino."}}]
+            })
+            engine = OpenRouterEngine(key="test-secret", model="openrouter/free")
+            engine.translate_with_context(
+                "Linen clothing.", "en", "es",
+                "Nombre original: Linen Clothing. Nombre traducido: Ropa de lino."
+            )
+            request = mocked.call_args.args[0]
+            payload = json.loads(request.data.decode("utf-8"))
+            user_message = payload["messages"][1]["content"]
+            self.assertIn("Nombre original: Linen Clothing", user_message)
+            self.assertIn("Nombre traducido: Ropa de lino", user_message)
+
     def test_spanish_rpg_prompt_explains_equipment_context(self):
         prompt = LlamaCppEngine._system_prompt("es")
         self.assertIn("'linen' es el tejido lino", prompt)
