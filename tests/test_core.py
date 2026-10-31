@@ -142,8 +142,8 @@ class Tests(unittest.TestCase):
     def test_glossary_normalizes_names_and_preserves_rpg_codes(self):
         glossary = load_glossary()
         self.assertEqual(
-            normalize_names(r"\\C[22]Грант habló con Элио", glossary),
-            r"\\C[22]Grant habló con Elio",
+            normalize_names(r"\C[22]Грант habló con Элио", glossary),
+            r"\C[22]Grant habló con Elio",
         )
         self.assertEqual(normalize_names("Охранник", glossary), "Охранник")
 
@@ -158,7 +158,7 @@ class Tests(unittest.TestCase):
         map_path = os.path.join(data_dir, "Map001.json")
         game_map = read(map_path)
         commands = game_map["events"][1]["pages"][0]["list"]
-        commands[0]["parameters"][4] = r"\\C[22]Элио"
+        commands[0]["parameters"][4] = r"\C[22]Элио"
         commands.insert(1, {"code": 101, "indent": 0,
                             "parameters": ["", 0, 0, 2, "Охранник"]})
         commands.insert(2, {"code": 401, "indent": 0,
@@ -181,7 +181,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(output_actors[1]["name"], "Grant")
         output_map = read(os.path.join(out, "Map001.json"))
         output_commands = output_map["events"][1]["pages"][0]["list"]
-        self.assertEqual(output_commands[0]["parameters"][4], r"\\C[22]Elio")
+        self.assertEqual(output_commands[0]["parameters"][4], r"\C[22]Elio")
         self.assertEqual(output_commands[1]["parameters"][4], "[ES] Охранник")
         self.assertIn("Grant", output_commands[2]["parameters"][0])
         self.assertIn("Elio", output_commands[2]["parameters"][0])
