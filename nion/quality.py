@@ -16,11 +16,17 @@ _VERIFIED_ES = {
         "[Equipamiento general] Ropa de lino con alta transpirabilidad."
     ),
     "a vest made of tanned hide": "Un chaleco hecho de cuero curtido.",
+    "[general equipment] a vest made of tanned hide": (
+        "[Equipamiento general] Un chaleco hecho de cuero curtido."
+    ),
     "a vest made of leather hardened with glue": (
         "Un chaleco de cuero endurecido con pegamento."
     ),
+    "[general equipment] a vest made of leather hardened with glue": (
+        "[Equipamiento general] Un chaleco de cuero endurecido con pegamento."
+    ),
     "a large, old shield that survived time. has something inscribed but it has mostly faded away": (
-        "Un escudo grande y antiguo que ha resistido el paso del tiempo. "
+        "Un escudo grande y viejo que ha resistido el paso del tiempo. "
         "Tiene algo grabado, pero casi se ha borrado."
     ),
     "[large shield] a large shield made of iron steel": (
