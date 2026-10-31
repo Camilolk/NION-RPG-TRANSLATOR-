@@ -248,8 +248,8 @@ class Tests(unittest.TestCase):
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
-        self.assertTrue(line.startswith("\\C[2]X:Grant"), line)
-        self.assertIn("X:Grant says hello", line)
+        self.assertTrue(line.startswith("\\C[2]Grant "), line)
+        self.assertIn("Grant X:says hello", line)
         self.assertIn("\\N[1]", line)
 
     def test_resume_after_failure(self):
