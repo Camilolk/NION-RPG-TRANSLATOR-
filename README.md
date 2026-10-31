@@ -37,8 +37,12 @@ La memoria y las copias de juegos son datos locales; no deben subirse a GitHub.
 ## Pruebas
     python -m unittest discover -s tests -v
 
-## Protección de códigos
-El núcleo intenta preservar códigos como \C[2], \V[1], \N[1], %1 y etiquetas compatibles. Los motores deben devolver exactamente un resultado de texto por entrada; una respuesta incompleta se trata como error.
+## Protección de códigos y nombres propios
+El núcleo protege códigos como \\C[2], \\V[1], \\N[1], \\I[64], %1 y etiquetas compatibles. Los marcadores deben regresar una sola vez y en el mismo orden; si el motor los altera, NION recurre a traducir segmentos sin tocar los tokens.
+
+Los nombres de actores de Actors.json, los nombres de hablantes de eventos y los nombres de eventos detectados se excluyen de la traducción y se protegen también cuando aparecen dentro de diálogos. Esta es una protección automática conservadora; aún falta una interfaz de glosario para que el usuario autorice excepciones explícitas.
+
+Los motores deben devolver exactamente un resultado de texto por entrada; una respuesta incompleta se trata como error.
 
 ## Limitaciones conocidas
 - Cada línea de diálogo (comando 401) se procesa por separado; falta agrupar bloques consecutivos y añadir un análisis visual de desbordamiento adaptado a la configuración real de cada juego. NION no debe cambiar el tamaño original de la fuente.
