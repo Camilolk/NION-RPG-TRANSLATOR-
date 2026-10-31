@@ -60,7 +60,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
     if hasattr(engine, "set_terminology"):
-        engine.set_terminology(glossary.get("terms", {}))
+        engine.set_terminology(glossary.get("terms", {}), glossary.get("term_variants", {}))
     pending = pending_texts(entries, memory, protected_terms, glossary)
     log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
     leftovers = []
