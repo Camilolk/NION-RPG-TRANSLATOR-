@@ -89,6 +89,63 @@ def _chunks(seq, size):
         yield seq[i:i + size]
 
 
+def _record_contexts(entries, memory, protected_terms, glossary, src, tgt):
+    """Relaciona descripciones de bases RPG Maker con el nombre de su registro."""
+    supported = {"Armors", "Items", "Weapons", "Skills"}
+    names = {}
+    for entry in entries:
+        stem = entry.file[:-5] if entry.file.endswith(".json") else entry.file
+        if stem in supported and len(entry.path) == 2 and entry.path[1] == "name":
+            names[(entry.file, entry.path[0])] = entry.text
+
+    contexts = {}
+    labels = {
+        "Armors": "armadura",
+        "Items": "objeto",
+        "Weapons": "arma",
+        "Skills": "habilidad",
+    }
+    for entry in entries:
+        stem = entry.file[:-5] if entry.file.endswith(".json") else entry.file
+        if (stem not in supported or len(entry.path) != 2
+                or entry.path[1] != "description"):
+            continue
+        source_name = names.get((entry.file, entry.path[0]))
+        if not source_name:
+            continue
+        translated_name = render(
+            source_name, memory, protected_terms, glossary, src, tgt
+        )
+        details = [
+            "Tipo de registro: %s." % labels[stem],
+            "Nombre original del registro: %s." % source_name,
+        ]
+        if translated_name:
+            details.append("Nombre traducido y aprobado: %s." % translated_name)
+        details.append(
+            "La descripción pertenece a este registro. Usa el nombre para "
+            "interpretar términos ambiguos y mantener la terminología; no "
+            "insertes el nombre ni información nueva en la traducción."
+        )
+        contexts.setdefault(entry.text, " ".join(details))
+    return contexts
+
+
+def _translate_one(engine, text, src, tgt, context=None):
+    if context and hasattr(engine, "translate_with_context"):
+        result = engine.translate_with_context(text, src, tgt, context)
+        if not isinstance(result, str):
+            raise EngineError("%s devolvió una traducción que no es texto." % engine.name)
+        return result
+    return _translate_exact(engine, [text], src, tgt)[0]
+
+
+def _retry_one(engine, text, src, tgt, context=None):
+    if context and hasattr(engine, "retry_masked_with_context"):
+        return engine.retry_masked_with_context(text, src, tgt, context)
+    return engine.retry_masked(text, src, tgt)
+
+
 def _translate_exact(engine, texts, src, tgt):
     outputs = engine.translate_batch(texts, src, tgt)
     if not isinstance(outputs, (list, tuple)) or len(outputs) != len(texts):
@@ -106,6 +163,9 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
     pending = pending_texts(entries, memory, protected_terms, glossary, src, tgt)
+    contexts = _record_contexts(
+        entries, memory, protected_terms, glossary, src, tgt
+    )
     log("Textos por traducir: %d (%d caracteres)" %
         (len(pending), sum(map(len, pending))))
     leftovers = []
@@ -118,18 +178,16 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 mask(normalize_names(text, glossary), engine.placeholder, protected_terms)
                 for text in chunk
             ]
-            outputs = _translate_exact(
-                engine, [masked for masked, _ in plan], src, tgt
-            )
-
-            for original, (masked, tokens), translated in zip(chunk, plan, outputs):
+            for original, (masked, tokens) in zip(chunk, plan):
+                context = contexts.get(original)
+                translated = _translate_one(engine, masked, src, tgt, context)
                 restored = unmask(translated, tokens, engine.placeholder)
                 prepared = normalize_names(original, glossary)
 
                 # Si el modelo dañó marcadores, un reintento puede recuperarlos.
                 if restored is None and hasattr(engine, "retry_masked"):
                     log("  marcadores alterados; reintentando...")
-                    retried = engine.retry_masked(masked, src, tgt)
+                    retried = _retry_one(engine, masked, src, tgt, context)
                     restored = unmask(retried, tokens, engine.placeholder)
 
                 if restored is None:
@@ -142,7 +200,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 if issue:
                     log("  control de calidad: %s; reintentando..." % issue)
                     if hasattr(engine, "retry_masked"):
-                        retried = engine.retry_masked(masked, src, tgt)
+                        retried = _retry_one(engine, masked, src, tgt, context)
                         restored = unmask(retried, tokens, engine.placeholder)
                         if restored is not None:
                             approved, issue = _approve_translation(
