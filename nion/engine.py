@@ -22,6 +22,13 @@ class Engine:
     def translate_batch(self, texts, src, tgt):
         raise NotImplementedError
 
+    def translate_with_context(self, text, src, tgt, context):
+        """Traduce un texto con contexto opcional; los motores antiguos lo ignoran."""
+        return self.translate_batch([text], src, tgt)[0]
+
+    def retry_masked_with_context(self, text, src, tgt, context):
+        return self.retry_masked(text, src, tgt)
+
 
 class EchoEngine(Engine):
     name = "echo"
@@ -142,9 +149,17 @@ class LlamaCppEngine(Engine):
         """Reintenta una frase enmascarada con instrucciones más estrictas."""
         return self.translate_batch([text], src, tgt, strict=True)[0]
 
-    def translate_batch(self, texts, src, tgt, strict=False):
+    def retry_masked_with_context(self, text, src, tgt, context):
+        return self.translate_batch(
+            [text], src, tgt, strict=True, contexts=[context]
+        )[0]
+
+    def translate_with_context(self, text, src, tgt, context):
+        return self.translate_batch([text], src, tgt, contexts=[context])[0]
+
+    def translate_batch(self, texts, src, tgt, strict=False, contexts=None):
         outputs = []
-        for text in texts:
+        for index, text in enumerate(texts):
             payload = {
                 "model": "local-model",
                 "messages": [
@@ -158,6 +173,13 @@ class LlamaCppEngine(Engine):
                 "temperature": 0.1,
                 "max_tokens": min(1024, max(128, len(text) * 3)),
             }
+            context = contexts[index] if contexts and index < len(contexts) else None
+            if context:
+                payload["messages"][1]["content"] = (
+                    "Contexto del registro del juego (úsalo para desambiguar, "
+                    "pero traduce únicamente el texto indicado):\n"
+                    + context + "\n\n" + payload["messages"][1]["content"]
+                )
             req = urllib.request.Request(
                 self.url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                 headers={"Content-Type": "application/json"}, method="POST")
@@ -205,9 +227,17 @@ class OpenRouterEngine(Engine):
         self.url = "https://openrouter.ai/api/v1/chat/completions"
         self.timeout = timeout
 
-    def translate_batch(self, texts, src, tgt, strict=False):
+    def retry_masked_with_context(self, text, src, tgt, context):
+        return self.translate_batch(
+            [text], src, tgt, strict=True, contexts=[context]
+        )[0]
+
+    def translate_with_context(self, text, src, tgt, context):
+        return self.translate_batch([text], src, tgt, contexts=[context])[0]
+
+    def translate_batch(self, texts, src, tgt, strict=False, contexts=None):
         outputs = []
-        for text in texts:
+        for index, text in enumerate(texts):
             system = LlamaCppEngine._system_prompt(tgt, strict=strict)
             payload = {
                 "model": self.model,
@@ -220,6 +250,13 @@ class OpenRouterEngine(Engine):
                 "temperature": 0.15,
                 "max_tokens": min(1200, max(160, len(text) * 4)),
             }
+            context = contexts[index] if contexts and index < len(contexts) else None
+            if context:
+                payload["messages"][1]["content"] = (
+                    "Contexto del registro del juego (úsalo para desambiguar, "
+                    "pero traduce únicamente el texto indicado):\n"
+                    + context + "\n\n" + payload["messages"][1]["content"]
+                )
             req = urllib.request.Request(
                 self.url,
                 data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -316,6 +353,51 @@ class HybridEngine(Engine):
                     )
                 raise
         return outputs
+
+    def translate_with_context(self, text, src, tgt, context):
+        ruled = self._rule_translation(text)
+        if ruled is not None:
+            return ruled
+        cloud_error = None
+        if self.cloud is not None:
+            try:
+                if hasattr(self.cloud, "translate_with_context"):
+                    return self.cloud.translate_with_context(text, src, tgt, context)
+                return self.cloud.translate_batch([text], src, tgt)[0]
+            except EngineError as error:
+                cloud_error = error
+        try:
+            if hasattr(self.local, "translate_with_context"):
+                return self.local.translate_with_context(text, src, tgt, context)
+            return self.local.translate_batch([text], src, tgt)[0]
+        except EngineError as local_error:
+            if cloud_error is not None:
+                raise EngineError(
+                    "Fallaron nube y motor local. Nube: %s | Local: %s"
+                    % (cloud_error, local_error)
+                )
+            raise
+
+    def retry_masked_with_context(self, text, src, tgt, context):
+        cloud_error = None
+        if self.cloud is not None:
+            try:
+                if hasattr(self.cloud, "retry_masked_with_context"):
+                    return self.cloud.retry_masked_with_context(text, src, tgt, context)
+                return self.cloud.retry_masked(text, src, tgt)
+            except EngineError as error:
+                cloud_error = error
+        try:
+            if hasattr(self.local, "retry_masked_with_context"):
+                return self.local.retry_masked_with_context(text, src, tgt, context)
+            return self.local.retry_masked(text, src, tgt)
+        except EngineError as local_error:
+            if cloud_error is not None:
+                raise EngineError(
+                    "Fallaron nube y motor local. Nube: %s | Local: %s"
+                    % (cloud_error, local_error)
+                )
+            raise
 
     def retry_masked(self, text, src, tgt):
         return self.translate_batch([text], src, tgt)[0]
