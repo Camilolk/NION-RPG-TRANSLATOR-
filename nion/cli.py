@@ -1,5 +1,6 @@
 """CLI mínima: python -m nion scan|translate|apply JUEGO ..."""
 import argparse
+import logging
 import os
 import sys
 from .engine import EngineError, get_engine
@@ -10,6 +11,12 @@ from .pipeline import apply_translations, pending_texts, scan, translate_pending
 
 
 def main(argv=None):
+    level_name = os.environ.get("NION_LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser(prog="nion", description="NION RPG Translator (núcleo)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
