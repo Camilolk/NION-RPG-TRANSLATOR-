@@ -64,6 +64,16 @@ class LlamaCppTests(unittest.TestCase):
         self.assertNotIn("español latinoamericano", payload["messages"][0]["content"])
 
     @patch("nion.engine.urllib.request.urlopen")
+    def test_strict_retry_prompt(self, mocked):
+        mocked.return_value = FakeResponse({"choices": [{"message": {"content": "⟦0⟧Debemos apresurarnos."}}]})
+        result = LlamaCppEngine().retry_masked("⟦0⟧We should hurry.", "en", "es")
+        self.assertEqual(result, "⟦0⟧Debemos apresurarnos.")
+        payload = json.loads(mocked.call_args.args[0].data.decode("utf-8"))
+        prompt = payload["messages"][0]["content"]
+        self.assertIn("MODO DE REINTENTO ESTRICTO", prompt)
+        self.assertIn("mismo orden", prompt)
+
+    @patch("nion.engine.urllib.request.urlopen")
     def test_invalid_response_fails_loudly(self, mocked):
         mocked.return_value = FakeResponse({"unexpected": []})
         with self.assertRaises(EngineError):
