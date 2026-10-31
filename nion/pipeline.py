@@ -143,7 +143,7 @@ def _format_record_context(record, memory, protected_terms, glossary, src, tgt):
 
 
 def _translate_one(engine, text, src, tgt, context=None):
-    if context and hasattr(engine, "translate_with_context"):
+    if context and getattr(engine, "supports_context", False):
         result = engine.translate_with_context(text, src, tgt, context)
         if not isinstance(result, str):
             raise EngineError("%s devolvió una traducción que no es texto." % engine.name)
@@ -152,7 +152,7 @@ def _translate_one(engine, text, src, tgt, context=None):
 
 
 def _retry_one(engine, text, src, tgt, context=None):
-    if context and hasattr(engine, "retry_masked_with_context"):
+    if context and getattr(engine, "supports_context", False):
         return engine.retry_masked_with_context(text, src, tgt, context)
     return engine.retry_masked(text, src, tgt)
 
@@ -187,12 +187,26 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 mask(normalize_names(text, glossary), engine.placeholder, protected_terms)
                 for text in chunk
             ]
-            for original, (masked, tokens) in zip(chunk, plan):
-                context = _format_record_context(
+            record_contexts = [
+                _format_record_context(
                     contexts.get(original), memory, protected_terms,
                     glossary, src, tgt,
                 )
-                translated = _translate_one(engine, masked, src, tgt, context)
+                for original in chunk
+            ]
+            if getattr(engine, "supports_context", False) and any(record_contexts):
+                translated_items = [
+                    _translate_one(engine, masked, src, tgt, context)
+                    for (masked, _), context in zip(plan, record_contexts)
+                ]
+            else:
+                translated_items = _translate_exact(
+                    engine, [masked for masked, _ in plan], src, tgt
+                )
+
+            for original, (masked, tokens), translated, context in zip(
+                chunk, plan, translated_items, record_contexts
+            ):
                 restored = unmask(translated, tokens, engine.placeholder)
                 prepared = normalize_names(original, glossary)
 
