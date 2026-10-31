@@ -30,13 +30,13 @@ Desde la raíz del repositorio:
 
 Después ejecuta NION con `--engine llamacpp`. La URL predeterminada es `http://127.0.0.1:8080`; se puede cambiar con `--url` o `NION_LLAMACPP_URL`. El servidor debe permanecer activo. Las peticiones al servidor local no necesitan clave API ni conexión a Internet.
 
-El motor local envía un texto por petición para mantener la correspondencia entre entrada y salida. NION enmascara códigos RPG Maker y nombres protegidos antes de enviarlos y los restaura después. Si el modelo altera los marcadores, el pipeline recurre a traducir segmentos. NION comprueba marcadores, nombres protegidos, términos del glosario y correcciones exactas conocidas antes de aceptar una traducción. Estos controles reducen errores frecuentes, pero no detectan todos los problemas de significado o gramática: revisa una muestra antes de usar el resultado en un juego.
+El motor local envía un texto por petición para mantener la correspondencia entre entrada y salida. NION enmascara códigos RPG Maker y nombres protegidos antes de enviarlos y los restaura después. Si el modelo altera los marcadores, el pipeline recurre a traducir segmentos. El glosario solo normaliza y protege nombres propios; no se inyecta como lista de traducciones ni impone equivalencias de objetos. NION valida la integridad de los marcadores, los nombres y las respuestas vacías, pero no puede verificar automáticamente si una traducción conserva todo el significado o la gramática. La calidad lingüística depende del modelo; revisa una muestra antes de usar el resultado en un juego.
 
 La carpeta del juego puede ser la raíz que contiene data/ (MZ), www/data/ (MV), o directamente data/.
 
 ## Flujo seguro
 1. `scan` cuenta los textos sin llamar a ningún motor.
-2. `translate` traduce y valida antes de guardar en la memoria JSON. Los códigos RPG Maker y los nombres confirmados se protegen también en la ruta por segmentos (usada por DeepL o como respaldo). Las traducciones con errores verificables del glosario no se guardan como traducciones completas; la memoria se actualiza por lote para permitir reanudación.
+2. `translate` traduce y valida la integridad técnica antes de guardar en la memoria JSON. Los códigos RPG Maker y los nombres confirmados se protegen también en la ruta por segmentos (usada por DeepL o como respaldo). No hay reglas que reescriban frases ni un control semántico basado en términos; la memoria se actualiza por lote para permitir reanudación. La memoria predeterminada nueva es `nion_memory_<lang>_v2.json`, separada de las memorias antiguas.
 3. `apply` solo exporta cuando todos los textos detectados tienen traducción. Crea una carpeta nueva y nunca modifica los archivos originales.
 4. Si la carpeta de salida ya existe, NION se detiene para evitar mezclar archivos antiguos.
 
@@ -48,7 +48,7 @@ La memoria y las copias de juegos son datos locales; no deben subirse a GitHub.
 ## Códigos RPG Maker y glosario
 NION protege códigos como \\C[2], \\V[1], \\N[1], \\I[64], %1 y etiquetas compatibles. Los marcadores deben regresar una sola vez y en el mismo orden; si el motor los altera, NION recurre a traducir segmentos sin tocar los tokens.
 
-El archivo `nion/glossary.json` contiene nombres oficiales y variantes conocidas. Normaliza, por ejemplo, `Грант` a `Grant` y `Элио` a `Elio`, sin tocar códigos de formato. La lista inicial incluye Elio, Shiori, Erika, Grant, Tama, Kael y Ryou.
+El archivo `nion/glossary.json` contiene nombres oficiales y variantes conocidas. Normaliza, por ejemplo, `Грант` a `Grant` y `Элио` a `Elio`, sin tocar códigos de formato. La lista inicial incluye Elio, Shiori, Erika, Grant, Tama, Kael y Ryou. Las equivalencias de objetos y materiales no se envían al modelo ni se usan para rechazar traducciones.
 
 Los nombres de actores de `Actors.json` se normalizan en la copia exportada. Los nombres visibles de hablantes (comando 101) se extraen como texto: nombres del glosario se conservan; descripciones como `Охранник` se traducen. Los nombres internos de eventos, como `EV002` o `GrantHouse`, no se extraen.
 
