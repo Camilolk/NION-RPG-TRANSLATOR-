@@ -4,6 +4,7 @@ import os
 import sys
 
 from .engine import EngineError, get_engine
+from .extract import protected_names
 from .memory import Memory
 from .pipeline import apply_translations, pending_texts, scan, translate_pending
 
@@ -19,7 +20,7 @@ def main(argv=None):
 
     scan_parser = sub.add_parser("scan", help="cuenta textos sin traducir ni gastar nada")
     common(scan_parser)
-    translate_parser = sub.add_parser("translate", help="traduce lo que falta y lo guarda en memoria")
+    translate_parser = sub.add_parser("translate", help="traduce lo que falta y lo guarda en la memoria")
     common(translate_parser)
     translate_parser.add_argument("--engine", default="deepl", help="echo | deepl")
     translate_parser.add_argument("--key", default=os.environ.get("NION_DEEPL_KEY"))
@@ -32,14 +33,16 @@ def main(argv=None):
     memory = Memory(args.memory or "nion_memory_%s.json" % args.lang.lower())
     try:
         data_dir, entries = scan(args.game)
+        names = protected_names(data_dir)
         if args.cmd == "scan":
-            todo = pending_texts(entries, memory)
+            todo = pending_texts(entries, memory, names)
             print("Carpeta data:", data_dir)
             print("Entradas:", len(entries))
+            print("Nombres protegidos:", len(names))
             print("Por traducir:", len(todo), "textos,", sum(map(len, todo)), "caracteres")
         elif args.cmd == "translate":
             engine = get_engine(args.engine, args.key)
-            translate_pending(entries, memory, engine, args.src, args.lang)
+            translate_pending(entries, memory, engine, args.src, args.lang, protected_terms=names)
             print("TERMINADO. Memoria:", memory.path)
         else:
             output = args.out or data_dir.rstrip("/\\") + "_" + args.lang.lower()
