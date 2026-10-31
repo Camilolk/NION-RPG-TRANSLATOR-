@@ -10,7 +10,6 @@ from .codes import (
 from .engine import EngineError
 from .extract import find_data_dir, iter_entries, load_json, protected_names
 from .glossary import load_glossary, normalize_names
-from .quality import quality_issue, verified_correction
 
 
 def scan(game_path):
@@ -19,7 +18,7 @@ def scan(game_path):
 
 
 def _approve_translation(source, translated, src, tgt, glossary, protected_terms, log=None):
-    """Aplica correcciones confirmadas y rechaza fallos verificables."""
+    """Valida integridad técnica; no intenta juzgar ni reescribir la semántica."""
     if not isinstance(translated, str) or not translated.strip():
         return None, "traducción vacía o inválida"
 
@@ -27,15 +26,6 @@ def _approve_translation(source, translated, src, tgt, glossary, protected_terms
     if not names_preserved(prepared, translated, protected_terms):
         return None, "se perdió o alteró un nombre protegido"
 
-    corrected, reason = verified_correction(source, translated, src, tgt)
-    if reason:
-        translated = corrected
-        if log:
-            log("  control de calidad: se aplicó una corrección verificada.")
-
-    issue = quality_issue(source, translated, src, tgt, glossary)
-    if issue:
-        return None, issue
     return translated, None
 
 
@@ -98,11 +88,6 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     """Traduce, valida y solo entonces guarda; los tokens y nombres quedan protegidos."""
     glossary = glossary or load_glossary()
     protected_terms = protected_terms or protected_names(glossary=glossary)
-    if hasattr(engine, "set_terminology"):
-        engine.set_terminology(
-            glossary.get("terms", {}), glossary.get("term_variants", {})
-        )
-
     pending = pending_texts(entries, memory, protected_terms, glossary, src, tgt)
     log("Textos por traducir: %d (%d caracteres)" %
         (len(pending), sum(map(len, pending))))
@@ -262,7 +247,7 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None, src
     for entry in iter_entries(data_dir):
         by_file.setdefault(entry.file, []).append(entry)
         if needs_translation(entry.text) and render(
-            entry.text, memory, protected_terms, glossary
+            entry.text, memory, protected_terms, glossary, src, tgt
         ) is None:
             missing[entry.text] = 1
     if missing:
