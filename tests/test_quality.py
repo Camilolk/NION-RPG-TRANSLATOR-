@@ -162,7 +162,7 @@ class QualityTests(unittest.TestCase):
 
     def test_verified_rpg_descriptions_correct_known_grammar_and_material(self):
         cases = {
-            "[General Equipment] Linen clothing with high\\nbreathability.": (
+            "[General Equipment] Linen clothing with high\nbreathability.": (
                 "[Equipamiento general] Ropa de lino con alta transpirabilidad."
             ),
             "A large, old shield that survived time. Has something inscribed but it has mostly faded away.": (
