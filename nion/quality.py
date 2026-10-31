@@ -12,6 +12,20 @@ _VERIFIED_ES = {
     "we should hurry": "Deberíamos darnos prisa.",
     "they should hurry": "Deberían darse prisa.",
     "we are going to find him": "Vamos a encontrarlo.",
+    "[general equipment] linen clothing with high breathability": (
+        "[Equipamiento general] Ropa de lino con alta transpirabilidad."
+    ),
+    "a vest made of tanned hide": "Un chaleco hecho de cuero curtido.",
+    "a vest made of leather hardened with glue": (
+        "Un chaleco de cuero endurecido con pegamento."
+    ),
+    "a large, old shield that survived time. has something inscribed but it has mostly faded away": (
+        "Un escudo grande y antiguo que ha resistido el paso del tiempo. "
+        "Tiene algo grabado, pero casi se ha borrado."
+    ),
+    "[large shield] a large shield made of iron steel": (
+        "[Escudo grande] Un escudo grande hecho de acero."
+    ),
 }
 
 
@@ -54,8 +68,20 @@ def terminology_issues(source, translated, glossary, src, tgt):
     if (src or "").lower().split("-")[0] != "en" or (tgt or "").lower().split("-")[0] != "es":
         return []
     terms = glossary.get("terms", {}) if isinstance(glossary, dict) else {}
+    variants = glossary.get("term_variants", {}) if isinstance(glossary, dict) else {}
     issues = []
+    covered = []
     for original, expected in sorted(terms.items(), key=lambda item: -len(item[0])):
-        if _has_term(source, original) and not _has_term(translated, expected):
+        match = re.search(r"(?<!\\w)" + re.escape(original) + r"(?!\\w)", source, re.IGNORECASE)
+        if not match:
+            continue
+        # Una expresión compuesta prevalece sobre sus componentes: "iron steel"
+        # no exige además que aparezca "hierro" por separado.
+        if any(match.start() < end and match.end() > start for start, end in covered):
+            continue
+        covered.append(match.span())
+        accepted = [expected]
+        accepted.extend(variants.get(original, []))
+        if not any(_has_term(translated, candidate) for candidate in accepted):
             issues.append((original, expected))
     return issues
