@@ -21,14 +21,15 @@ Desde la raíz del repositorio:
 
     python -m nion scan RUTA_DEL_JUEGO --lang es
     python -m nion translate RUTA_DEL_JUEGO --lang es --engine echo
+    python -m nion translate RUTA_DEL_JUEGO --lang es --engine hybrid
     python -m nion translate RUTA_DEL_JUEGO --lang es --engine llamacpp
     python -m nion apply RUTA_DEL_JUEGO --lang es
 
-`echo` solo comprueba el flujo; no traduce. Para DeepL, define `NION_DEEPL_KEY` o usa `--key`. Para llama.cpp, inicia el servidor en otra sesión de Termux:
+`echo` solo comprueba el flujo; no traduce. El motor predeterminado es `hybrid`: aplica primero equivalencias exactas del glosario, usa OpenRouter si existe `NION_OPENROUTER_KEY` y recurre a llama.cpp cuando la nube falla o no está configurada. Para OpenRouter, define `NION_OPENROUTER_KEY`; el modelo predeterminado es `openrouter/free` y puede cambiarse con `NION_OPENROUTER_MODEL` o `--model`. Los modelos gratuitos tienen límites de uso y disponibilidad variables. Los textos enviados a OpenRouter salen del teléfono y se procesan por el proveedor; no incluyas datos privados del juego si no aceptas ese envío. Para DeepL, define `NION_DEEPL_KEY` o usa `--key`. Para llama.cpp, inicia el servidor en otra sesión de Termux:
 
     llama-server -m RUTA_DEL_MODELO.gguf -c 2048 --host 127.0.0.1 --port 8080
 
-Después ejecuta NION con `--engine llamacpp`. La URL predeterminada es `http://127.0.0.1:8080`; se puede cambiar con `--url` o `NION_LLAMACPP_URL`. El servidor debe permanecer activo. Las peticiones al servidor local no necesitan clave API ni conexión a Internet.
+Después ejecuta NION con `--engine llamacpp` o deja que `hybrid` lo use como respaldo. La URL predeterminada es `http://127.0.0.1:8080`; se puede cambiar con `--url` o `NION_LLAMACPP_URL`. El servidor debe permanecer activo. Las peticiones al servidor local no necesitan clave API ni conexión a Internet.
 
 El motor local envía un texto por petición para mantener la correspondencia entre entrada y salida. NION enmascara códigos RPG Maker y nombres protegidos antes de enviarlos y los restaura después. Si el modelo altera los marcadores, el pipeline recurre a traducir segmentos. El glosario solo normaliza y protege nombres propios; no se inyecta como lista de traducciones ni impone equivalencias de objetos. NION valida la integridad de los marcadores, los nombres y las respuestas vacías, pero no puede verificar automáticamente si una traducción conserva todo el significado o la gramática. La calidad lingüística depende del modelo; revisa una muestra antes de usar el resultado en un juego.
 
@@ -55,6 +56,6 @@ Los nombres de actores de `Actors.json` se normalizan en la copia exportada. Los
 ## Limitaciones
 - Cada línea de diálogo (comando 401) se procesa por separado; falta agrupar bloques y analizar desbordamiento visual. NION no debe cambiar el tamaño original de la fuente.
 - No procesa plugins, imágenes con texto ni todos los campos posibles de RPG Maker.
-- Motores: echo, deepl y llamacpp. El motor local evita costes por petición, pero consume recursos del teléfono; velocidad y calidad dependen del modelo.
+- Motores: hybrid, openrouter, deepl, llamacpp y echo. `hybrid` combina reglas exactas, memoria, OpenRouter opcional y llama.cpp local como respaldo. Las reglas solo se aplican a entradas completas del glosario; no sustituyen palabras dentro de frases. La validación rechaza contaminación de caracteres CJK en idiomas latinos, pero no puede certificar la calidad semántica. Los modelos gratuitos remotos pueden aplicar límites o dejar de estar disponibles.
 - No hay interfaz web.
 - DeepL no ha sido validado contra la API real en este proyecto.
