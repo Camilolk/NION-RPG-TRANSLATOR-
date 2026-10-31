@@ -15,6 +15,21 @@ class ShortEngine(Engine):
         return []
 
 
+class RetryEngine(Engine):
+    name = "retry-test"
+    max_batch = 1
+
+    def __init__(self):
+        self.retried = []
+
+    def translate_batch(self, texts, src, tgt):
+        return ["⟦99⟧ respuesta rota"]
+
+    def retry_masked(self, text, src, tgt):
+        self.retried.append(text)
+        return text.replace("⟦0⟧", "⟦0⟧Traducción correcta")
+
+
 class SafetyTests(unittest.TestCase):
     def setUp(self):
         import tempfile
@@ -23,6 +38,16 @@ class SafetyTests(unittest.TestCase):
 
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_masked_translation_retries_before_segment_fallback(self):
+        game = os.path.join(self.root, "game")
+        make_game(game)
+        _, entries = scan(game)
+        engine = RetryEngine()
+        memory = Memory(os.path.join(self.root, "retry.json"))
+        translate_pending(entries, memory, engine, "en", "es", log=lambda *_: None,
+                          protected_terms=["Elio"])
+        self.assertTrue(engine.retried)
 
     def test_incomplete_engine_response_fails_loudly(self):
         game = os.path.join(self.root, "game")
