@@ -6,6 +6,7 @@ import shutil
 from .codes import compose_from_segments, mask, needs_translation, text_segments, unmask
 from .engine import EngineError
 from .extract import find_data_dir, iter_entries, load_json, protected_names
+from .glossary import load_glossary, normalize_names
 
 
 def scan(game_path):
@@ -13,18 +14,25 @@ def scan(game_path):
     return data_dir, list(iter_entries(data_dir))
 
 
-def render(text, memory, protected_terms=()):
+def render(text, memory, protected_terms=(), glossary=None):
+    glossary = glossary or load_glossary()
+    prepared = normalize_names(text, glossary)
     if text in memory:
-        return memory[text]
-    return compose_from_segments(text, memory, protected_terms)
+        return normalize_names(memory[text], glossary)
+    if prepared in memory:
+        return normalize_names(memory[prepared], glossary)
+    return compose_from_segments(prepared, memory, protected_terms)
 
 
-def pending_texts(entries, memory, protected_terms=()):
+def pending_texts(entries, memory, protected_terms=(), glossary=None):
+    glossary = glossary or load_glossary()
     seen, out = set(), []
     for entry in entries:
         if entry.text not in seen:
             seen.add(entry.text)
-            if needs_translation(entry.text) and render(entry.text, memory, protected_terms) is None:
+            if needs_translation(entry.text) and render(
+                entry.text, memory, protected_terms, glossary
+            ) is None:
                 out.append(entry.text)
     return out
 
@@ -45,16 +53,22 @@ def _translate_exact(engine, texts, src, tgt):
     return outputs
 
 
-def translate_pending(entries, memory, engine, src, tgt, log=print, protected_terms=()):
-    """Guarda memoria por lote; códigos y nombres propios quedan fuera del motor."""
-    pending = pending_texts(entries, memory, protected_terms)
+def translate_pending(entries, memory, engine, src, tgt, log=print,
+                      protected_terms=(), glossary=None):
+    """Guarda memoria por lote; códigos y nombres oficiales quedan fuera del motor."""
+    glossary = glossary or load_glossary()
+    protected_terms = protected_terms or protected_names(glossary=glossary)
+    pending = pending_texts(entries, memory, protected_terms, glossary)
     log("Textos por traducir: %d (%d caracteres)" % (len(pending), sum(map(len, pending))))
     leftovers = []
 
     if engine.supports_masking:
         done = 0
         for chunk in _chunks(pending, engine.max_batch):
-            plan = [mask(text, engine.placeholder, protected_terms) for text in chunk]
+            plan = [
+                mask(normalize_names(text, glossary), engine.placeholder, protected_terms)
+                for text in chunk
+            ]
             outputs = _translate_exact(engine, [masked for masked, _ in plan], src, tgt)
             for original, (_, tokens), translated in zip(chunk, plan, outputs):
                 restored = unmask(translated, tokens, engine.placeholder)
@@ -71,8 +85,9 @@ def translate_pending(entries, memory, engine, src, tgt, log=print, protected_te
     if leftovers:
         log("Traducción por trozos para %d textos con tokens protegidos..." % len(leftovers))
         segments = []
+        prepared_texts = {text: normalize_names(text, glossary) for text in leftovers}
         for text in leftovers:
-            for _, core, _ in text_segments(text, protected_terms):
+            for _, core, _ in text_segments(prepared_texts[text], protected_terms):
                 if core not in memory and core not in segments:
                     segments.append(core)
         done = 0
@@ -84,7 +99,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print, protected_te
             done += len(chunk)
             log("  trozos %d / %d" % (done, len(segments)))
         for text in leftovers:
-            composed = compose_from_segments(text, memory, protected_terms)
+            composed = compose_from_segments(prepared_texts[text], memory, protected_terms)
             if composed is not None:
                 memory.set(text, composed)
     memory.save()
@@ -97,10 +112,36 @@ def _set_path(data, path, value):
     node[path[-1]] = value
 
 
-def apply_translations(game_path, out_dir, memory, log=print):
+def _normalize_actor_names(out_dir, glossary):
+    """Normaliza solo nombres de actores; no altera identificadores de eventos."""
+    path = os.path.join(out_dir, "Actors.json")
+    if not os.path.isfile(path):
+        return
+    data = load_json(path)
+    changed = False
+    if isinstance(data, list):
+        for actor in data:
+            if isinstance(actor, dict) and isinstance(actor.get("name"), str):
+                normalized = normalize_names(actor["name"], glossary)
+                if normalized != actor["name"]:
+                    actor["name"] = normalized
+                    changed = True
+    if changed:
+        temporary = path + ".nion-tmp"
+        try:
+            with open(temporary, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, ensure_ascii=False, separators=(",", ":"))
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.remove(temporary)
+
+
+def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
     """No crea una salida parcial: exige todas las traducciones antes de copiar."""
+    glossary = glossary or load_glossary()
     data_dir = find_data_dir(game_path)
-    protected_terms = protected_names(data_dir)
+    protected_terms = protected_names(data_dir, glossary)
     data_abs, out_abs = os.path.abspath(data_dir), os.path.abspath(out_dir)
     if out_abs == data_abs or os.path.commonpath([data_abs, out_abs]) == data_abs:
         raise EngineError("La salida no puede ser la carpeta original ni estar dentro de ella.")
@@ -110,7 +151,9 @@ def apply_translations(game_path, out_dir, memory, log=print):
     by_file, missing = {}, {}
     for entry in iter_entries(data_dir):
         by_file.setdefault(entry.file, []).append(entry)
-        if needs_translation(entry.text) and render(entry.text, memory, protected_terms) is None:
+        if needs_translation(entry.text) and render(
+            entry.text, memory, protected_terms, glossary
+        ) is None:
             missing[entry.text] = 1
     if missing:
         log("Exportación cancelada: faltan %d textos. No se creó ninguna copia." % len(missing))
@@ -126,7 +169,7 @@ def apply_translations(game_path, out_dir, memory, log=print):
         data = load_json(os.path.join(data_dir, filename))
         changed = False
         for entry in entries:
-            translated = (render(entry.text, memory, protected_terms)
+            translated = (render(entry.text, memory, protected_terms, glossary)
                           if needs_translation(entry.text) else None)
             if translated is not None:
                 _set_path(data, entry.path, translated)
@@ -142,5 +185,6 @@ def apply_translations(game_path, out_dir, memory, log=print):
             finally:
                 if os.path.exists(temporary):
                     os.remove(temporary)
+    _normalize_actor_names(out_abs, glossary)
     log("Textos aplicados: %d | sin traducir: 0" % applied)
     return applied, []
