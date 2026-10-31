@@ -144,7 +144,8 @@ class Tests(unittest.TestCase):
         before = open(d + "/Items.json", encoding="utf-8").read()
         mem = Memory(os.path.join(self.root, "m.json"))
         _, entries = scan(root)
-        translate_pending(entries, mem, EchoEngine(), "en", "es", log=lambda *_: None)
+        translate_pending(entries, mem, EchoEngine(), "en", "es", log=lambda *_: None,
+                          protected_terms=protected_names(d))
         out = os.path.join(self.root, "out")
         applied, missing = apply_translations(root, out, mem, log=lambda *_: None)
         self.assertEqual(open(d + "/Items.json", encoding="utf-8").read(), before)
@@ -159,7 +160,8 @@ class Tests(unittest.TestCase):
         make_game(root)
         mem = Memory(os.path.join(self.root, "m.json"))
         _, entries = scan(root)
-        translate_pending(entries, mem, EchoEngine(), "en", "es", log=lambda *_: None)
+        translate_pending(entries, mem, EchoEngine(), "en", "es", log=lambda *_: None,
+                          protected_terms=protected_names(root))
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
@@ -172,7 +174,8 @@ class Tests(unittest.TestCase):
         make_game(root)
         mem = Memory(os.path.join(self.root, "m.json"))
         _, entries = scan(root)
-        translate_pending(entries, mem, LossyEngine(), "en", "es", log=lambda *_: None)
+        translate_pending(entries, mem, LossyEngine(), "en", "es", log=lambda *_: None,
+                          protected_terms=protected_names(root + "/data"))
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
@@ -184,17 +187,20 @@ class Tests(unittest.TestCase):
         root = os.path.join(self.root, "g")
         make_game(root)
         path = os.path.join(self.root, "m.json")
-        _, entries = scan(root)
+        data_dir, entries = scan(root)
+        names = protected_names(data_dir)
         BreakingEngine.calls = 0
         with self.assertRaises(EngineError):
-            translate_pending(entries, Memory(path), BreakingEngine(), "en", "es", log=lambda *_: None)
+            translate_pending(entries, Memory(path), BreakingEngine(), "en", "es", log=lambda *_: None,
+                              protected_terms=names)
         saved = len(Memory(path))
         self.assertGreater(saved, 0)
         mem = Memory(path)
-        before = len(pending_texts(entries, mem))
+        before = len(pending_texts(entries, mem, names))
         BreakingEngine.calls = 10
-        translate_pending(entries, mem, BreakingEngine(), "en", "es", log=lambda *_: None)
-        self.assertEqual(len(pending_texts(entries, mem)), 0)
+        translate_pending(entries, mem, BreakingEngine(), "en", "es", log=lambda *_: None,
+                          protected_terms=names)
+        self.assertEqual(len(pending_texts(entries, mem, names)), 0)
         self.assertGreater(before, 0)
 
     def test_old_segment_cache_is_reused(self):
