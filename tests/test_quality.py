@@ -211,5 +211,31 @@ class QualityTests(unittest.TestCase):
         self.assertTrue(reason)
 
 
+
+    def test_rejects_semantic_drift_found_in_100_text_sample(self):
+        glossary = load_glossary()
+        cases = [
+            ("Mushroom Monster", "Monstero de hongo", "monstruo de los hongos"),
+            ("The inn should be open.", "La alberca debería estar abierta.", "posada"),
+            ("The tents are occupied.", "Los tendones están ocupados.", "tiendas de campaña"),
+            ("Thunder spells", "Hechizos de choque", "hechizos de trueno"),
+            ("Trial", "Tráiler", "prueba"),
+            ("Ice II", "II de Hielo", "hielo II"),
+            ("%1 hid.", "%1 se hidró.", "se escondió"),
+            ("Provoke", "¡Aprocha!", "provocar"),
+            ("[Sword] A sword forged from the fangs of a dragon.",
+             "[cuchillo] Un cuchillo forjado con las garras de un dragón.",
+             "espada"),
+        ]
+        for source, bad_translation, expected in cases:
+            with self.subTest(source=source):
+                self.assertTrue(
+                    quality_issue(source, bad_translation, "en", "es", glossary)
+                )
+                self.assertIsNone(
+                    quality_issue(source, expected, "en", "es", glossary)
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
