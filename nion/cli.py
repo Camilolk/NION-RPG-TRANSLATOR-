@@ -51,7 +51,8 @@ def main(argv=None):
             print("Nombres protegidos:", len(names))
             print("Por traducir:", len(todo), "textos,", sum(map(len, todo)), "caracteres")
         elif args.cmd == "translate":
-            engine = get_engine(args.engine, args.key, args.url, glossary=glossary,\n                                model=args.model, openrouter_key=args.openrouter_key)
+            engine = get_engine(args.engine, args.key, args.url, glossary=glossary,
+                                model=args.model, openrouter_key=args.openrouter_key)
             translate_pending(entries, memory, engine, args.src, args.lang,
                               protected_terms=names, glossary=glossary)
             print("TERMINADO. Memoria:", memory.path)
