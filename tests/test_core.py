@@ -75,15 +75,15 @@ class Tests(unittest.TestCase):
 
 
     def test_code_only_mask_keeps_proper_names_visible(self):
-        original = r"\\C[22]Elio: We need to find Shiori before sunset. \\V[1]"
+        original = r"\C[22]Elio: We need to find Shiori before sunset. \\V[1]"
         masked, tokens = mask(original, protected_terms=())
-        self.assertEqual(tokens, [r"\\C[22]", r"\\V[1]"])
+        self.assertEqual(tokens, [r"\C[22]", r"\V[1]"])
         self.assertIn("Elio", masked)
         self.assertIn("Shiori", masked)
         translated = masked.replace("We need to find", "Necesitamos encontrar a")
         restored = unmask(translated, tokens)
         self.assertTrue(names_preserved(original, restored, ["Elio", "Shiori"]))
-        self.assertIn(r"\\C[22]Elio", restored)
+        self.assertIn(r"\C[22]Elio", restored)
         self.assertIn(r"Shiori antes", restored)
 
     def test_names_preserved_rejects_missing_name(self):
@@ -248,8 +248,8 @@ class Tests(unittest.TestCase):
         out = os.path.join(self.root, "out")
         apply_translations(root, out, mem, log=lambda *_: None)
         line = read(out + "/Map001.json")["events"][1]["pages"][0]["list"][1]["parameters"][0]
-        self.assertTrue(line.startswith("\\C[2]Grant"), line)
-        self.assertIn("X:says hello", line)
+        self.assertTrue(line.startswith("\\C[2]X:Grant"), line)
+        self.assertIn("X:Grant says hello", line)
         self.assertIn("\\N[1]", line)
 
     def test_resume_after_failure(self):
