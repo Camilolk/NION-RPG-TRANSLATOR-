@@ -6,7 +6,8 @@ from types import SimpleNamespace
 from nion.engine import Engine
 from nion.memory import Memory
 from nion.pipeline import translate_pending
-from nion.quality import quality_issue, verified_correction
+from nion.quality import quality_issue, terminology_issues, verified_correction
+from nion.glossary import load_glossary
 
 
 class QualityTests(unittest.TestCase):
@@ -80,6 +81,34 @@ class QualityTests(unittest.TestCase):
             self.assertEqual(engine.retry_calls, 1)
             self.assertEqual(memory["We should hurry."], "Deberíamos darnos prisa.")
             self.assertTrue(any("corrección verificada" in line for line in logs))
+
+    def test_detects_wrong_rpg_object_and_material(self):
+        glossary = load_glossary()
+        self.assertTrue(quality_issue("Bronze Shield", "Escudo de plata", "en", "es", glossary))
+        self.assertIsNone(quality_issue("Bronze Shield", "Escudo de bronce", "en", "es", glossary))
+        self.assertTrue(quality_issue("Hard Leather", "Cuerda dura", "en", "es", glossary))
+        self.assertTrue(quality_issue("Helmets", "Cabezas", "en", "es", glossary))
+
+    def test_pipeline_rejects_rpg_term_after_failed_retry(self):
+        class WrongTermEngine(Engine):
+            name = "wrong-term-test"
+            max_batch = 1
+
+            def translate_batch(self, texts, src, tgt):
+                return ["Escudo de plata"]
+
+            def retry_masked(self, text, src, tgt):
+                return "Escudo de plata"
+
+        with tempfile.TemporaryDirectory() as directory:
+            engine = WrongTermEngine()
+            memory = Memory(os.path.join(directory, "memory.json"))
+            entry = SimpleNamespace(text="Bronze Shield")
+            logs = []
+            translate_pending([entry], memory, engine, "en", "es",
+                              log=logs.append, protected_terms=[])
+            self.assertNotIn("Bronze Shield", memory)
+            self.assertTrue(any("término RPG no conservado" in line for line in logs))
 
     def test_normalizes_case_spacing_and_final_punctuation(self):
         corrected, reason = verified_correction(
