@@ -38,7 +38,7 @@ def main(argv=None):
         glossary = load_glossary(args.glossary)
         names = protected_names(data_dir, glossary)
         if args.cmd == "scan":
-            todo = pending_texts(entries, memory, names)
+            todo = pending_texts(entries, memory, names, glossary)
             print("Carpeta data:", data_dir)
             print("Entradas:", len(entries))
             print("Nombres protegidos:", len(names))
