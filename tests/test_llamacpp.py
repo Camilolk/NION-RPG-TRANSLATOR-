@@ -51,9 +51,11 @@ class LlamaCppTests(unittest.TestCase):
         payload = json.loads(request.data.decode("utf-8"))
         prompt = payload["messages"][0]["content"]
         self.assertIn("español latinoamericano natural", prompt)
-        self.assertIn("misma persona gramatical", prompt)
-        self.assertIn("Debemos apresurarnos", prompt)
-        self.assertIn("del norte", prompt)
+        self.assertIn("persona y el número gramatical", prompt)
+        self.assertIn("tiempo verbal y la modalidad", prompt)
+        self.assertIn("primera, segunda o tercera persona", prompt)
+        self.assertNotIn("We should hurry", prompt)
+        self.assertNotIn("Debemos apresurarnos", prompt)
         self.assertIn("[[NION_TOKEN_n]]", prompt)
         self.assertEqual(payload["messages"][1]["content"], "We should hurry.")
 
