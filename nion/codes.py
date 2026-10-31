@@ -49,8 +49,14 @@ def split_parts(text, protected_terms=()):
         match = min(matches, key=lambda m: (m.start(), 0 if m.re is CODE_RE else 1))
         if match.start() > pos:
             parts.append((False, text[pos:match.start()]))
-        parts.append((True, match.group(0)))
-        pos = match.end()
+        token = match.group(0)
+        end = match.end()
+        # Preserve the speaker delimiter in dialogue labels such as "Elio:".
+        if match.re is not CODE_RE and end < len(text) and text[end] == ":":
+            token += ":"
+            end += 1
+        parts.append((True, token))
+        pos = end
     return parts
 
 
