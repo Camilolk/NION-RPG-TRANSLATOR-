@@ -101,19 +101,19 @@ class Tests(unittest.TestCase):
 
     def test_mask_protects_exact_line_breaks(self):
         for original in (
-            "First line\\nSecond line",
-            "First line\\r\\nSecond line",
-            "First line\\n\\nThird line",
+            "First line\nSecond line",
+            "First line\r\nSecond line",
+            "First line\n\nThird line",
         ):
             with self.subTest(original=original):
                 masked, tokens = mask(original)
-                self.assertNotIn("\\n", masked)
-                self.assertNotIn("\\r", masked)
+                self.assertNotIn("\n", masked)
+                self.assertNotIn("\r", masked)
                 self.assertEqual(unmask(masked, tokens), original)
+                expected_breaks = original.count("\n")
                 self.assertEqual(
-                    sum(1 for token in tokens if token in ("\\n", "\\r\\n", "\\r")),
-                    original.count("\\n") if "\\r" not in original
-                    else original.count("\\r"),
+                    sum(1 for token in tokens if token in ("\n", "\r\n", "\r")),
+                    expected_breaks,
                 )
 
     def test_proper_names_are_masked_and_restored(self):
