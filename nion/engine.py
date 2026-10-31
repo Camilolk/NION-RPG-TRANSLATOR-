@@ -324,14 +324,14 @@ class OpenRouterEngine(Engine):
             "choice_count": len(choices) if isinstance(choices, list) else 0,
         }
 
-    def _log_response(self, attempt, diagnostics, elapsed):
+    def _log_response(self, attempt, diagnostics, elapsed, status=200):
         logger.info(
-            "OpenRouter response model=%s attempt=%d elapsed_ms=%d "
+            "OpenRouter response model=%s status=%d attempt=%d elapsed_ms=%d "
             "finish_reason=%s content_kind=%s content_chars=%d "
             "reasoning_present=%s reasoning_chars=%d reasoning_tokens=%s "
             "prompt_tokens=%s completion_tokens=%s total_tokens=%s "
             "block_types=%s",
-            self.model, attempt, int(elapsed * 1000),
+            self.model, status, attempt, int(elapsed * 1000),
             diagnostics["finish_reason"], diagnostics["content_kind"],
             diagnostics["content_chars"], diagnostics["reasoning_present"],
             diagnostics["reasoning_chars"], diagnostics["reasoning_tokens"],
@@ -369,7 +369,9 @@ class OpenRouterEngine(Engine):
                     data = json.loads(response.read().decode("utf-8"))
 
                 content, diagnostics = self._response_diagnostics(data)
-                self._log_response(attempt + 1, diagnostics, time.monotonic() - started)
+                self._log_response(
+                    attempt + 1, diagnostics, time.monotonic() - started, status
+                )
                 finish_reason = diagnostics["finish_reason"]
 
                 if finish_reason == "length":
