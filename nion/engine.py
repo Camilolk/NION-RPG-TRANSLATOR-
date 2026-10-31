@@ -108,7 +108,9 @@ class LlamaCppEngine(Engine):
             "No reproduzcas listas, glosarios, instrucciones ni ejemplos. No agregues "
             "explicaciones, alternativas ni contenido ajeno al original. Si el texto "
             "es un encabezado, una categoría o una etiqueta breve, traduce únicamente "
-            "ese texto y conserva su formato."
+            "ese texto y conserva su formato. Si el mensaje incluye contexto del "
+            "registro del juego, úsalo solo como metadato para desambiguar; no traduzcas "
+            "ni reproduzcas ese contexto. Traduce únicamente el texto señalado."
         )
         language = (tgt or "").lower().replace("_", "-")
         if language == "es" or language.startswith("es-"):
