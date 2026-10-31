@@ -94,9 +94,11 @@ def _record_contexts(entries):
     supported = {"Armors", "Items", "Weapons", "Skills"}
     names = {}
     for entry in entries:
-        stem = entry.file[:-5] if entry.file.endswith(".json") else entry.file
-        if stem in supported and len(entry.path) == 2 and entry.path[1] == "name":
-            names[(entry.file, entry.path[0])] = entry.text
+        filename = getattr(entry, "file", "")
+        path = getattr(entry, "path", ())
+        stem = filename[:-5] if filename.endswith(".json") else filename
+        if stem in supported and len(path) == 2 and path[1] == "name":
+            names[(filename, path[0])] = entry.text
 
     contexts = {}
     labels = {
@@ -106,10 +108,12 @@ def _record_contexts(entries):
         "Skills": "habilidad",
     }
     for entry in entries:
-        stem = entry.file[:-5] if entry.file.endswith(".json") else entry.file
-        if (stem in supported and len(entry.path) == 2
-                and entry.path[1] == "description"):
-            source_name = names.get((entry.file, entry.path[0]))
+        filename = getattr(entry, "file", "")
+        path = getattr(entry, "path", ())
+        stem = filename[:-5] if filename.endswith(".json") else filename
+        if (stem in supported and len(path) == 2
+                and path[1] == "description"):
+            source_name = names.get((filename, path[0]))
             if source_name:
                 contexts.setdefault(
                     entry.text, (labels[stem], source_name)
