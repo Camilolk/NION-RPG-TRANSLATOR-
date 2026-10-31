@@ -135,5 +135,5 @@ def get_engine(name, key=None, url=None):
     if name == "deepl":
         return DeepLEngine(key)
     if name == "llamacpp":
-        return LlamaCppEngine(url)
+        return LlamaCppEngine(url or "http://127.0.0.1:8080")
     raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp)" % name)
