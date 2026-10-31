@@ -7,6 +7,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from nion.engine import EngineError, HybridEngine, OpenRouterEngine
+import nion.cli  # noqa: F401 - verifies the command-line module remains importable
 from nion.pipeline import _approve_translation
 from nion.glossary import load_glossary
 
