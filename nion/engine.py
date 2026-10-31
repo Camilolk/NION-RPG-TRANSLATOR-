@@ -1,9 +1,8 @@
-"""Motores de traducción intercambiables. Todos fallan EN VOZ ALTA (EngineError)."""
+"""Motores de traducción intercambiables."""
 import json
 import time
 import urllib.error
 import urllib.request
-
 from .codes import default_placeholder
 
 
@@ -14,7 +13,7 @@ class EngineError(Exception):
 class Engine:
     name = "base"
     max_batch = 40
-    supports_masking = True   # ¿respeta marcadores tipo ⟦0⟧ dentro del texto?
+    supports_masking = True
 
     def placeholder(self, i):
         return default_placeholder(i)
@@ -24,7 +23,6 @@ class Engine:
 
 
 class EchoEngine(Engine):
-    """Motor de prueba: no traduce de verdad, solo marca el texto. Sin red."""
     name = "echo"
 
     def translate_batch(self, texts, src, tgt):
@@ -32,9 +30,8 @@ class EchoEngine(Engine):
 
 
 class DeepLEngine(Engine):
-    """DeepL API (plan Free: clave terminada en :fx). Solo biblioteca estándar."""
     name = "deepl"
-    supports_masking = False   # se traduce por trozos, sin marcadores
+    supports_masking = False
 
     def __init__(self, key):
         if not key:
@@ -70,9 +67,73 @@ class DeepLEngine(Engine):
                 raise EngineError("DeepL: sin conexión (%s)" % e.reason)
 
 
-def get_engine(name, key=None):
+class LlamaCppEngine(Engine):
+    """API local compatible con OpenAI proporcionada por llama-server."""
+    name = "llamacpp"
+    max_batch = 1
+    supports_masking = True
+
+    def __init__(self, url="http://127.0.0.1:8080", timeout=180):
+        if not url or not url.strip():
+            raise EngineError("La URL de llama.cpp está vacía.")
+        base = url.strip().rstrip("/")
+        if base.endswith("/chat/completions"):
+            self.url = base
+        elif base.endswith("/v1"):
+            self.url = base + "/chat/completions"
+        else:
+            self.url = base + "/v1/chat/completions"
+        self.timeout = timeout
+
+    def translate_batch(self, texts, src, tgt):
+        outputs = []
+        for text in texts:
+            payload = {
+                "model": "local-model",
+                "messages": [
+                    {"role": "system", "content":
+                     "Eres traductor profesional de videojuegos RPG Maker. Traduce fielmente "
+                     "con lenguaje natural. Responde solo con la traducción, sin explicaciones "
+                     "ni comillas. Conserva literalmente todos los marcadores ⟦n⟧: no los "
+                     "cambies, elimines, dupliques ni reordenes. No traduzcas nombres propios "
+                     "protegidos por esos marcadores."},
+                    {"role": "user", "content":
+                     "Idioma origen: %s\nIdioma destino: %s\nTexto:\n%s" % (src, tgt, text)}
+                ],
+                "temperature": 0.1,
+                "max_tokens": min(1024, max(128, len(text) * 3)),
+            }
+            req = urllib.request.Request(
+                self.url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST")
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                content = data["choices"][0]["message"]["content"]
+                if not isinstance(content, str) or not content.strip():
+                    raise EngineError("llama.cpp devolvió una respuesta vacía o inválida.")
+                outputs.append(content.strip())
+            except EngineError:
+                raise
+            except urllib.error.HTTPError as error:
+                try:
+                    detail = error.read().decode("utf-8", "replace")[:300]
+                except Exception:
+                    detail = str(error.reason)
+                raise EngineError("llama.cpp respondió HTTP %d: %s" % (error.code, detail))
+            except urllib.error.URLError as error:
+                raise EngineError("No se pudo conectar con llama.cpp en %s: %s" %
+                                  (self.url, error.reason))
+            except (KeyError, IndexError, TypeError, ValueError) as error:
+                raise EngineError("Respuesta API de llama.cpp no válida: %s" % error)
+        return outputs
+
+
+def get_engine(name, key=None, url=None):
     if name == "echo":
         return EchoEngine()
     if name == "deepl":
         return DeepLEngine(key)
-    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl)" % name)
+    if name == "llamacpp":
+        return LlamaCppEngine(url)
+    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp)" % name)
