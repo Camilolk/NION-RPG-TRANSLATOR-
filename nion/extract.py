@@ -3,6 +3,8 @@ import json
 import os
 from collections import namedtuple
 
+from .glossary import glossary_terms, load_glossary
+
 Entry = namedtuple("Entry", "file path text")
 
 DB_FIELDS = {
@@ -35,40 +37,9 @@ def _is_str(value):
     return isinstance(value, str) and value != ""
 
 
-def protected_names(data_dir):
-    """Nombres de actores y hablantes que no deben pasar por el traductor."""
-    names = set()
-    actors_path = os.path.join(data_dir, "Actors.json")
-    if os.path.isfile(actors_path):
-        actors = load_json(actors_path)
-        for actor in actors if isinstance(actors, list) else []:
-            if isinstance(actor, dict) and _is_str(actor.get("name")):
-                names.add(actor["name"])
-
-    def walk(node):
-        if isinstance(node, dict):
-            if node.get("code") == 101:
-                params = node.get("parameters")
-                if isinstance(params, list) and len(params) > 4 and _is_str(params[4]):
-                    names.add(params[4])
-            if isinstance(node.get("pages"), list) and _is_str(node.get("name")):
-                names.add(node["name"])
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for value in node:
-                walk(value)
-
-    for fname in sorted(os.listdir(data_dir)):
-        if fname.endswith(".json") and (
-            fname.startswith("Map") or fname in ("CommonEvents.json", "Troops.json")
-        ):
-            try:
-                walk(load_json(os.path.join(data_dir, fname)))
-            except (OSError, ValueError):
-                # El escaneo normal reportará después el JSON dañado con su ruta.
-                raise
-    return sorted(names, key=lambda value: (-len(value), value.casefold()))
+def protected_names(data_dir=None, glossary=None):
+    """Solo protege nombres confirmados en el glosario, nunca nombres de eventos."""
+    return glossary_terms(glossary or load_glossary())
 
 
 def _command_entries(file, commands, base):
@@ -79,7 +50,10 @@ def _command_entries(file, commands, base):
         if not isinstance(params, list):
             continue
         params_base = base + (i, "parameters")
-        if code in (401, 405) and params and _is_str(params[0]):
+        if code == 101 and len(params) > 4 and _is_str(params[4]):
+            # Nombre visible del hablante: se traduce salvo que esté en el glosario.
+            yield Entry(file, params_base + (4,), params[4])
+        elif code in (401, 405) and params and _is_str(params[0]):
             yield Entry(file, params_base + (0,), params[0])
         elif code == 102 and params and isinstance(params[0], list):
             for k, value in enumerate(params[0]):
