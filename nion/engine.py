@@ -98,11 +98,13 @@ class LlamaCppEngine(Engine):
         language = (tgt or "").lower().replace("_", "-")
         if language == "es" or language.startswith("es-"):
             prompt += (
-                " El idioma destino es español. Usa español latinoamericano natural. Mantén la misma persona "
-                "gramatical del original: 'we' corresponde a 'nosotros'. "
-                "'We should hurry' debe expresar 'Debemos apresurarnos'. "
-                "Para indicar ubicación, prefiere 'del norte' cuando sea natural "
-                "en lugar de convertirlo en un adjetivo como 'norteño'."
+                " El idioma destino es español. Usa español latinoamericano natural. "
+                "Antes de traducir, identifica quién realiza la acción y conserva "
+                "exactamente la persona y el número gramatical del sujeto, así como "
+                "el tiempo verbal y la modalidad. No conviertas primera, segunda o "
+                "tercera persona en otra, ni cambies singular por plural o viceversa. "
+                "Interpreta el sentido de la frase completa; no reutilices una "
+                "traducción fija para sujetos diferentes."
             )
         if strict:
             prompt += (
