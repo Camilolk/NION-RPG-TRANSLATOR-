@@ -176,7 +176,7 @@ class QualityTests(unittest.TestCase):
             "A vest made of leather hardened with glue.": (
                 "Un chaleco de cuero endurecido con pegamento."
             ),
-            "[General Equipment] A vest made of leather\\nhardened with glue.": (
+            "[General Equipment] A vest made of leather\nhardened with glue.": (
                 "[Equipamiento general] Un chaleco de cuero endurecido con pegamento."
             ),
             "[Large Shield] A large shield made of iron steel.": (
@@ -193,7 +193,7 @@ class QualityTests(unittest.TestCase):
 
         glossary = load_glossary()
         old_shield_source = (
-            "A large, old shield that survived time.\\n"
+            "A large, old shield that survived time.\n"
             "Has something inscribed but it has mostly faded away."
         )
         old_shield_translation = cases[
