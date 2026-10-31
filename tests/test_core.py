@@ -84,7 +84,7 @@ class Tests(unittest.TestCase):
         restored = unmask(translated, tokens)
         self.assertTrue(names_preserved(original, restored, ["Elio", "Shiori"]))
         self.assertIn(r"\C[22]Elio", restored)
-        self.assertIn(r"Shiori antes", restored)
+        self.assertIn(r"Shiori before", restored)
 
     def test_names_preserved_rejects_missing_name(self):
         self.assertFalse(names_preserved("Elio habló con Shiori.", "Elio habló.", ["Elio", "Shiori"]))
