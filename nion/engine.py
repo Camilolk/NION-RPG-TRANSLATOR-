@@ -15,6 +15,7 @@ class Engine:
     name = "base"
     max_batch = 40
     supports_masking = True
+    supports_context = False
 
     def placeholder(self, i):
         return default_placeholder(i)
@@ -80,6 +81,7 @@ class LlamaCppEngine(Engine):
     name = "llamacpp"
     max_batch = 1
     supports_masking = True
+    supports_context = True
 
     def __init__(self, url="http://127.0.0.1:8080", timeout=180):
         if not url or not url.strip():
@@ -215,6 +217,7 @@ class OpenRouterEngine(Engine):
     name = "openrouter"
     max_batch = 1
     supports_masking = True
+    supports_context = True
 
     def __init__(self, key=None, model=None, timeout=120):
         self.key = (key or os.environ.get("NION_OPENROUTER_KEY") or "").strip()
@@ -302,6 +305,7 @@ class HybridEngine(Engine):
     name = "hybrid"
     max_batch = 1
     supports_masking = True
+    supports_context = True
 
     def __init__(self, glossary=None, openrouter_key=None, model=None,
                  local_url="http://127.0.0.1:8080"):
