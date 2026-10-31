@@ -67,6 +67,12 @@ class Tests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_mask_keeps_colon_after_protected_speaker_name(self):
+        masked, tokens = mask("Elio: We should hurry.", protected_terms=["Elio"])
+        self.assertEqual(tokens, ["Elio:"])
+        self.assertEqual(unmask(masked.replace("We should hurry.", "Debemos apresurarnos."),
+                                tokens), "Elio: Debemos apresurarnos.")
+
     def test_mask_roundtrip(self):
         t = "\\C[2]Hola\\C[0] %1 <WordWrap> \\{grande\\}"
         masked, tokens = mask(t)
