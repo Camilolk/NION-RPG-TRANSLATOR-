@@ -95,7 +95,7 @@ class PipelineSafetyTests(unittest.TestCase):
                 self.context = context
                 if text == "Linen Clothing":
                     return "Ropa de lino"
-                return "Ropa de lino con alta\\ntranspirabilidad."
+                return "Ropa de lino con alta" + chr(10) + "transpirabilidad."
 
         with tempfile.TemporaryDirectory() as directory:
             engine = ContextEngine()
@@ -104,7 +104,7 @@ class PipelineSafetyTests(unittest.TestCase):
                 SimpleNamespace(file="Armors.json", path=(1, "name"),
                                 text="Linen Clothing"),
                 SimpleNamespace(file="Armors.json", path=(1, "description"),
-                                text="Linen clothing with high\\nbreathability."),
+                                text="Linen clothing with high" + chr(10) + "breathability."),
             ]
             translate_pending(
                 entries, memory, engine, "en", "es",
@@ -112,8 +112,8 @@ class PipelineSafetyTests(unittest.TestCase):
             )
             self.assertEqual(memory["Linen Clothing"], "Ropa de lino")
             self.assertEqual(
-                memory["Linen clothing with high\\nbreathability."],
-                "Ropa de lino con alta\\ntranspirabilidad.",
+                memory["Linen clothing with high" + chr(10) + "breathability."],
+                "Ropa de lino con alta" + chr(10) + "transpirabilidad.",
             )
             self.assertIn("Nombre original del registro: Linen Clothing", engine.context)
             self.assertNotIn("Nombre traducido y aprobado", engine.context)
@@ -132,7 +132,7 @@ class PipelineSafetyTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             memory = self.memory(directory)
-            source = "A vest made of leather\\nhardened with glue."
+            source = "A vest made of leather" + chr(10) + "hardened with glue."
             logs = []
             translate_pending(
                 [SimpleNamespace(text=source)], memory, BrokenMarkerEngine(),
