@@ -52,7 +52,17 @@
     "helmet": "casco",
     "bandana": "bandana",
     "glue": "pegamento",
-    "iron steel": "acero"
+    "iron steel": "acero",
+    "mushroom monster": "monstruo de los hongos",
+    "inn": "posada",
+    "tents": "tiendas de campaña",
+    "thunder spells": "hechizos de trueno",
+    "trial": "prueba",
+    "ice II": "hielo II",
+    "sword": "espada",
+    "fangs": "colmillos",
+    "hid": "se escondió",
+    "provoke": "provocar"
   },
   "term_variants": {
     "breathability": [
