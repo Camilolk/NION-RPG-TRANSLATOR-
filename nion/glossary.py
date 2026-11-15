@@ -32,7 +32,8 @@ def load_glossary(path=None):
             if previous is not None and previous != canonical:
                 raise ValueError("La variante %r apunta a dos nombres oficiales." % variant)
             aliases[key] = canonical
-    return {"names": names, "aliases": aliases, "canonical": canonical_names}
+    return {"names": names, "aliases": aliases, "canonical": canonical_names,
+            "_alias_regex": _compile_aliases(aliases)}
 
 
 def glossary_terms(glossary):
@@ -42,8 +43,7 @@ def glossary_terms(glossary):
     return sorted(terms, key=lambda value: (-len(value), value.casefold()))
 
 
-def _alias_pattern(glossary):
-    aliases = glossary["aliases"]
+def _compile_aliases(aliases):
     if not aliases:
         return None
     variants = sorted(aliases, key=len, reverse=True)
@@ -51,6 +51,15 @@ def _alias_pattern(glossary):
         r"(?<!\w)(?:" + "|".join(re.escape(item) for item in variants) + r")(?!\w)",
         re.IGNORECASE,
     )
+
+
+def _alias_pattern(glossary):
+    """Compile once for a loaded glossary; retain support for custom dictionaries."""
+    pattern = glossary.get("_alias_regex")
+    if pattern is None and glossary.get("aliases"):
+        pattern = _compile_aliases(glossary["aliases"])
+        glossary["_alias_regex"] = pattern
+    return pattern
 
 
 def normalize_names(text, glossary):
