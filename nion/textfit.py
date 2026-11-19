@@ -4,7 +4,7 @@ import unicodedata
 
 from .codes import CODE_RE
 
-WORD_RE = re.compile(r"\\S+")
+WORD_RE = re.compile(r"\S+")
 
 
 def visible_width(text):
