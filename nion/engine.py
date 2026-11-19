@@ -215,11 +215,66 @@ class LlamaCppEngine(Engine):
         return outputs
 
 
+
+class MarianEngine(Engine):
+    """Traductor local MarianMT para inglés -> español (CPU)."""
+    name = "marian"
+    max_batch = 16
+    supports_masking = False
+
+    def __init__(self, model_id="Helsinki-NLP/opus-mt-en-es"):
+        self.model_id = model_id
+        self._tokenizer = None
+        self._model = None
+
+    def _load(self):
+        if self._model is not None:
+            return
+        try:
+            import torch
+            from transformers import MarianMTModel, MarianTokenizer
+        except ImportError as error:
+            raise EngineError(
+                "MarianMT requiere dependencias: "
+                "python -m pip install torch transformers sentencepiece sacremoses"
+            ) from error
+        try:
+            self._tokenizer = MarianTokenizer.from_pretrained(self.model_id)
+            self._model = MarianMTModel.from_pretrained(self.model_id)
+            self._model.eval()
+        except Exception as error:
+            raise EngineError("No se pudo cargar MarianMT: %s" % error) from error
+
+    def translate_batch(self, texts, src, tgt):
+        if src.lower() != "en" or tgt.lower() != "es":
+            raise EngineError("El modelo MarianMT instalado solo admite en -> es.")
+        if not texts:
+            return []
+        self._load()
+        import torch
+        try:
+            inputs = self._tokenizer(
+                texts, return_tensors="pt", padding=True, truncation=True,
+                max_length=512
+            )
+            with torch.inference_mode():
+                generated = self._model.generate(
+                    **inputs, max_new_tokens=512, num_beams=1
+                )
+            return self._tokenizer.batch_decode(
+                generated, skip_special_tokens=True
+            )
+        except Exception as error:
+            raise EngineError("MarianMT no pudo traducir el lote: %s" % error) from error
+
+
 def get_engine(name, key=None, url=None):
     if name == "echo":
         return EchoEngine()
     if name == "deepl":
         return DeepLEngine(key)
+    if name == "marian":
+        return MarianEngine()
     if name == "llamacpp":
         return LlamaCppEngine(url or "http://127.0.0.1:8080")
     raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp)" % name)
