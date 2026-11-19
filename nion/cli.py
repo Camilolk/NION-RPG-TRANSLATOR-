@@ -32,6 +32,8 @@ def main(argv=None):
     apply_parser = sub.add_parser("apply", help="crea una COPIA completa traducida; nunca toca el original")
     common(apply_parser)
     apply_parser.add_argument("--out", help="carpeta de salida (por defecto <data>_<lang>)")
+    apply_parser.add_argument("--textfit", action="store_true", help="ajusta cuadros de diálogo 101/401")
+    apply_parser.add_argument("--textfit-width", type=int, default=48, help="ancho estimado por línea (por defecto 48)")
 
     args = parser.parse_args(argv)
     memory = Memory(args.memory or "nion_memory_%s.json" % args.lang.lower())
@@ -52,7 +54,11 @@ def main(argv=None):
             print("TERMINADO. Memoria:", memory.path)
         else:
             output = args.out or data_dir.rstrip("/\\") + "_" + args.lang.lower()
-            applied, missing = apply_translations(args.game, output, memory, glossary=glossary)
+            if args.textfit_width < 15 or args.textfit_width > 100:
+                raise ValueError("--textfit-width debe estar entre 15 y 100")
+            applied, missing = apply_translations(
+                args.game, output, memory, glossary=glossary,
+                textfit=args.textfit, textfit_width=args.textfit_width)
             if missing:
                 with open("faltan.txt", "w", encoding="utf-8") as fh:
                     fh.write("\n".join(missing))
