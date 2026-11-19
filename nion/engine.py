@@ -70,7 +70,7 @@ class DeepLEngine(Engine):
 class LlamaCppEngine(Engine):
     """API local compatible con OpenAI proporcionada por llama-server."""
     name = "llamacpp"
-    max_batch = 1
+    max_batch = 4
     supports_masking = True
 
     def __init__(self, url="http://127.0.0.1:8080", timeout=180):
@@ -125,6 +125,27 @@ class LlamaCppEngine(Engine):
         return self.translate_batch([text], src, tgt, strict=True)[0]
 
     def translate_batch(self, texts, src, tgt, strict=False):
+        if len(texts) > 1:
+            # Keep one-to-one correspondence. A malformed batch is retried as
+            # individual requests rather than storing misaligned translations.
+            try:
+                numbered = json.dumps(texts, ensure_ascii=False)
+                instruction = (
+                    "Translate every string in the JSON array from %s to %s. "
+                    "Return ONLY a JSON array of exactly %d translated strings "
+                    "in the same order. Preserve all technical tokens verbatim. "
+                    "No markdown or explanations.\\nInput: %s"
+                    % (src, tgt, len(texts), numbered)
+                )
+                raw = self.translate_batch([instruction], src, tgt, strict=True)[0]
+                parsed = json.loads(raw)
+                if (isinstance(parsed, list) and len(parsed) == len(texts)
+                        and all(isinstance(x, str) and x.strip() for x in parsed)):
+                    return parsed
+            except (ValueError, TypeError, EngineError):
+                pass
+            return [self.translate_batch([text], src, tgt, strict=strict)[0]
+                    for text in texts]
         outputs = []
         for text in texts:
             payload = {
