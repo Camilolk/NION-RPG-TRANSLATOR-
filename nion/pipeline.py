@@ -93,10 +93,12 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
     if leftovers:
         log("Traducción por trozos para %d textos con tokens protegidos..." % len(leftovers))
         segments = []
+        seen_segments = set()
         prepared_texts = {text: normalize_names(text, glossary) for text in leftovers}
         for text in leftovers:
             for _, core, _ in text_segments(prepared_texts[text], ()):
-                if core not in memory and core not in segments:
+                if core not in memory and core not in seen_segments:
+                    seen_segments.add(core)
                     segments.append(core)
         done = 0
         for chunk in _chunks(segments, engine.max_batch):
