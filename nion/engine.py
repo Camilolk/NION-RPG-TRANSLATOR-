@@ -126,24 +126,55 @@ class LlamaCppEngine(Engine):
 
     def translate_batch(self, texts, src, tgt, strict=False):
         if len(texts) > 1:
-            # Keep one-to-one correspondence. A malformed batch is retried as
-            # individual requests rather than storing misaligned translations.
+            # Ask llama.cpp to constrain the output to a JSON object.
+            # Validate count and types; otherwise fall back safely.
+            prompt = (
+                "Translate each item from %s to %s. Return only JSON with "
+                "a 'translations' array of exactly %d strings in input order. "
+                "Preserve all technical placeholders verbatim. "
+                "Input JSON: %s"
+                % (src, tgt, len(texts), json.dumps(texts, ensure_ascii=False))
+            )
+            schema = {
+                "type": "object",
+                "properties": {
+                    "translations": {
+                        "type": "array",
+                        "minItems": len(texts),
+                        "maxItems": len(texts),
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["translations"],
+                "additionalProperties": False
+            }
+            payload = {
+                "model": "local-model",
+                "messages": [
+                    {"role": "system", "content":
+                     "You translate RPG dialogue. Output only the requested JSON. "
+                     "Keep all placeholders unchanged. Do not add commentary."},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.1,
+                "max_tokens": min(4096, max(256, sum(len(t) for t in texts) * 3)),
+                "response_format": {"type": "json_schema", "schema": schema}
+            }
+            req = urllib.request.Request(
+                self.url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST")
             try:
-                numbered = json.dumps(texts, ensure_ascii=False)
-                instruction = (
-                    "Translate every string in the JSON array from %s to %s. "
-                    "Return ONLY a JSON array of exactly %d translated strings "
-                    "in the same order. Preserve all technical tokens verbatim. "
-                    "No markdown or explanations.\\nInput: %s"
-                    % (src, tgt, len(texts), numbered)
-                )
-                raw = self.translate_batch([instruction], src, tgt, strict=True)[0]
+                with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                    data = json.loads(response.read().decode("utf-8"))
+                raw = data["choices"][0]["message"]["content"]
                 parsed = json.loads(raw)
-                if (isinstance(parsed, list) and len(parsed) == len(texts)
-                        and all(isinstance(x, str) and x.strip() for x in parsed)):
-                    return parsed
-            except (ValueError, TypeError, EngineError):
+                translations = parsed["translations"]
+                if (isinstance(translations, list) and len(translations) == len(texts)
+                        and all(isinstance(t, str) and t.strip() for t in translations)):
+                    return translations
+            except (urllib.error.URLError, ValueError, TypeError, KeyError, IndexError):
                 pass
+            # Never silently accept missing or misaligned batch outputs.
             return [self.translate_batch([text], src, tgt, strict=strict)[0]
                     for text in texts]
         outputs = []
