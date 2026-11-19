@@ -16,7 +16,7 @@ def visible_width(text):
 
 def wrap_message(lines, max_width=48, max_lines=4):
     """Devuelve líneas ajustadas o None si no caben de forma segura."""
-    if not lines or any("\\n" in line or "\\r" in line for line in lines):
+    if not lines or any("\n" in line or "\r" in line for line in lines):
         return None
     if all(visible_width(line) <= max_width for line in lines):
         return None
