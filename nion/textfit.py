@@ -42,7 +42,10 @@ def wrap_message(lines, max_width=48, max_lines=4):
 
 
 def fit_commands(commands, max_width=48):
-    """Refluye únicamente bloques 101+401; no altera opciones ni otros eventos."""
+    """Ajusta solo si puede conservar exactamente los comandos 401 existentes.
+
+    Evita insertar/eliminar comandos de evento: RPG Maker depende de su estructura.
+    """
     if not isinstance(commands, list):
         return 0, 0
     fixed = skipped = 0
@@ -62,16 +65,15 @@ def fit_commands(commands, max_width=48):
                          and isinstance(c["parameters"][0], str) for c in group):
             lines = [c["parameters"][0] for c in group]
             if any(visible_width(line) > max_width for line in lines):
-                new_lines = wrap_message(lines, max_width)
-                if new_lines is None:
+                # Conserva el número exacto de líneas y comandos del evento.
+                # Si hace falta otra línea, omite el cuadro en vez de corromperlo.
+                new_lines = wrap_message(lines, max_width, max_lines=len(group))
+                if new_lines is None or len(new_lines) != len(group):
                     skipped += 1
                 else:
-                    template = group[0]
-                    commands[i + 1:j] = [
-                        {**template, "parameters": [line]} for line in new_lines
-                    ]
+                    for original_command, line in zip(group, new_lines):
+                        original_command["parameters"][0] = line
                     fixed += 1
-                    j = i + 1 + len(new_lines)
         i = j
     return fixed, skipped
 
