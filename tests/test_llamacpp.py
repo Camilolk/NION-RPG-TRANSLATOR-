@@ -79,6 +79,25 @@ class LlamaCppTests(unittest.TestCase):
         with self.assertRaises(EngineError):
             LlamaCppEngine().translate_batch(["Hello"], "en", "es")
 
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_batch_json_keeps_order(self, mocked):
+        mocked.return_value = FakeResponse({"choices": [{"message": {
+            "content": '["Hola", "Adiós"]'}}]})
+        engine = LlamaCppEngine()
+        self.assertEqual(engine.translate_batch(["Hello", "Goodbye"], "en", "es"),
+                         ["Hola", "Adiós"])
+        self.assertEqual(mocked.call_count, 1)
+
+    @patch("nion.engine.urllib.request.urlopen")
+    def test_invalid_batch_falls_back_to_individual_requests(self, mocked):
+        def response(content):
+            return FakeResponse({"choices": [{"message": {"content": content}}]})
+        mocked.side_effect = [response("not JSON"), response("Hola"),
+                              response("Adiós")]
+        self.assertEqual(LlamaCppEngine().translate_batch(
+            ["Hello", "Goodbye"], "en", "es"), ["Hola", "Adiós"])
+        self.assertEqual(mocked.call_count, 3)
+
     def test_engine_factory(self):
         self.assertEqual(get_engine("llamacpp").name, "llamacpp")
 
