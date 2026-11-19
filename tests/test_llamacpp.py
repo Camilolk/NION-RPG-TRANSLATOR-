@@ -82,7 +82,7 @@ class LlamaCppTests(unittest.TestCase):
     @patch("nion.engine.urllib.request.urlopen")
     def test_batch_json_keeps_order(self, mocked):
         mocked.return_value = FakeResponse({"choices": [{"message": {
-            "content": '["Hola", "Adiós"]'}}]})
+            "content": '{"translations":["Hola", "Adiós"]}'}}]})
         engine = LlamaCppEngine()
         self.assertEqual(engine.translate_batch(["Hello", "Goodbye"], "en", "es"),
                          ["Hola", "Adiós"])
