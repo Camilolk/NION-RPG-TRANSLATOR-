@@ -7,6 +7,7 @@ from .codes import compose_from_segments, mask, names_preserved, needs_translati
 from .engine import EngineError
 from .extract import find_data_dir, iter_entries, load_json, protected_names
 from .glossary import load_glossary, normalize_names
+from .textfit import fit_data
 
 
 def scan(game_path):
@@ -147,7 +148,8 @@ def _normalize_actor_names(out_dir, glossary):
                 os.remove(temporary)
 
 
-def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
+def apply_translations(game_path, out_dir, memory, log=print, glossary=None,
+                       textfit=False, textfit_width=48):
     """No crea una salida parcial: exige todas las traducciones antes de copiar."""
     glossary = glossary or load_glossary()
     data_dir = find_data_dir(game_path)
@@ -175,6 +177,7 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
     shutil.copytree(data_dir, out_abs)
 
     applied = 0
+    fit_count = fit_skipped = 0
     for filename, entries in by_file.items():
         data = load_json(os.path.join(data_dir, filename))
         changed = False
@@ -185,6 +188,11 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
                 _set_path(data, entry.path, translated)
                 applied += 1
                 changed = True
+        if textfit:
+            fixed, skipped = fit_data(data, filename[:-5], textfit_width)
+            fit_count += fixed
+            fit_skipped += skipped
+            changed = changed or bool(fixed)
         if changed:
             target = os.path.join(out_abs, filename)
             temporary = target + ".nion-tmp"
@@ -196,5 +204,8 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None):
                 if os.path.exists(temporary):
                     os.remove(temporary)
     _normalize_actor_names(out_abs, glossary)
+    if textfit:
+        log("TextFit: %d cuadros ajustados; %d omitidos por seguridad (revisar manualmente)." %
+            (fit_count, fit_skipped))
     log("Textos aplicados: %d | sin traducir: 0" % applied)
     return applied, []
