@@ -18,7 +18,8 @@ def propose(rows, engine, limit=None):
             continue
         source = row["original"]
         try:
-            candidate = engine.translate_batch([source], "en", "es")[0]
+            candidate = (engine.translate_repair(source) if hasattr(engine, "translate_repair")
+                         else engine.translate_batch([source], "en", "es")[0])
             problems = sorted(SEVERE.intersection(inspect(source, candidate)))
             row["propuesta"] = candidate
             row["problemas_propuesta"] = problems
