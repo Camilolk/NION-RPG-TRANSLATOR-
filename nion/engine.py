@@ -245,6 +245,24 @@ class MarianEngine(Engine):
         except Exception as error:
             raise EngineError("No se pudo cargar MarianMT: %s" % error) from error
 
+    def translate_repair(self, text, src="en", tgt="es"):
+        """Decodificacion alternativa, solo para reparaciones solicitadas."""
+        if src.lower() != "en" or tgt.lower() != "es":
+            raise EngineError("MarianMT solo admite en -> es.")
+        self._load()
+        import torch
+        inputs = self._tokenizer(
+            [text], return_tensors="pt", padding=True,
+            truncation=True, max_length=512
+        )
+        with torch.inference_mode():
+            generated = self._model.generate(
+                **inputs, max_new_tokens=160, num_beams=4,
+                repetition_penalty=1.25, no_repeat_ngram_size=3,
+                early_stopping=True
+            )
+        return self._tokenizer.batch_decode(generated, skip_special_tokens=True)[0]
+
     def translate_batch(self, texts, src, tgt):
         if src.lower() != "en" or tgt.lower() != "es":
             raise EngineError("El modelo MarianMT instalado solo admite en -> es.")
