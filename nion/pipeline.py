@@ -104,7 +104,18 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
         done = 0
         for chunk in _chunks(segments, engine.max_batch):
             outputs = _translate_exact(engine, chunk, src, tgt)
+            from .quality import inspect as inspect_quality
             for core, translated in zip(chunk, outputs):
+                severe = {"traduccion_vacia", "repeticion_anomala",
+                          "expansion_extrema", "reduccion_extrema",
+                          "codigos_diferentes", "marcadores_diferentes"}
+                problems = severe.intersection(inspect_quality(core, translated))
+                if problems:
+                    log("  ALERTA calidad: %s | texto: %s" %
+                        (", ".join(sorted(problems)), core[:90]))
+                    # No guardar respuestas corruptas. Quedan pendientes
+                    # para una futura revision o reintento manual.
+                    continue
                 memory.set(core, translated)
             memory.save()
             done += len(chunk)
