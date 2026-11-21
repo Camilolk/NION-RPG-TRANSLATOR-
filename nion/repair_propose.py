@@ -1,11 +1,27 @@
 """Genera propuestas de reparación con MarianMT, sin tocar la memoria original."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 from .engine import MarianEngine
 from .quality import inspect
 from .repair import SEVERE
+
+def semantic_warnings(source, candidate):
+    """Heuristicas baratas para revision; no pretenden medir equivalencia semantica."""
+    warnings = []
+    if source.strip().casefold() == candidate.strip().casefold():
+        warnings.append("sin_traducir")
+    # Si desaparecen preguntas completas, la traduccion puede estar resumida.
+    if source.count("?") > candidate.count("?"):
+        warnings.append("preguntas_omitidas_posibles")
+    # Conservar un minimo de estructura en dialogos con varias frases.
+    source_parts = len(re.findall(r"[.!?]+(?:\\s+|$)", source))
+    candidate_parts = len(re.findall(r"[.!?]+(?:\\s+|$)", candidate))
+    if source_parts >= 3 and candidate_parts < max(1, source_parts // 2):
+        warnings.append("frases_omitidas_posibles")
+    return warnings
 
 def propose(rows, engine, limit=None):
     """Solo propone cambios seguros; nunca modifica las filas originales."""
@@ -21,6 +37,7 @@ def propose(rows, engine, limit=None):
             candidate = (engine.translate_repair(source) if hasattr(engine, "translate_repair")
                          else engine.translate_batch([source], "en", "es")[0])
             problems = sorted(SEVERE.intersection(inspect(source, candidate)))
+            problems.extend(semantic_warnings(source, candidate))
             row["propuesta"] = candidate
             row["problemas_propuesta"] = problems
             row["estado"] = "revisar" if problems else "propuesta_lista"
