@@ -1,6 +1,7 @@
 """Reparacion opcional con un modelo GGUF local, sin servidor."""
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 from .quality import inspect
@@ -45,6 +46,27 @@ class LocalGGUF:
             raise ValueError("El modelo genero secuencias de salto de linea literales")
         return candidate
 
+
+def fidelity_warnings(source, candidate):
+    """Senales conservadoras para revision humana; no equivalencia semantica."""
+    alerts = []
+    src = source.casefold()
+    dst = candidate.casefold()
+    # Caso real: 'And die!' convertido en 'y muevete'.
+    if re.search(r"\\bdie\\b", src) and not re.search(
+        r"\\b(morir|muere|mueran|muera|mueras|mueran|muerte|morirse|morira|moriran|moriras|fallec|muri|murio|muries)\\w*\\b", dst
+    ):
+        alerts.append("muerte_omitida_posible")
+    # 'N-No' -> '¡No!' pierde el tartamudeo.
+    if re.search(r"(?i)\\b([a-z])-\\1[a-z]+", source) and not re.search(
+        r"(?i)\\b([a-záéíóúñ])-\\1", candidate
+    ):
+        alerts.append("tartamudeo_perdido_posible")
+    # Avisar sobre preguntas sin signo de apertura (sin corregir automaticamente).
+    if "?" in candidate and "¿" not in candidate:
+        alerts.append("interrogacion_sin_apertura")
+    return alerts
+
 def review(rows, engine, limit=5):
     result = [dict(row) for row in rows]
     processed = 0
@@ -59,9 +81,11 @@ def review(rows, engine, limit=5):
             candidate = engine.translate(row["original"])
             warnings = sorted(SEVERE.intersection(inspect(row["original"], candidate)))
             warnings.extend(semantic_warnings(row["original"], candidate))
+            warnings.extend(fidelity_warnings(row["original"], candidate))
+            warnings = sorted(set(warnings))
             row["propuesta_gguf"] = candidate
             row["alertas_gguf"] = warnings
-            row["estado_gguf"] = "revisar" if warnings else "sin_alertas_automaticas"
+            row["estado_gguf"] = "revisar_con_alertas" if warnings else "pendiente_revision_humana"
         except Exception as error:
             row["estado_gguf"] = "error"
             row["error_gguf"] = str(error)[:300]
