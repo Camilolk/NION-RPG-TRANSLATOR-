@@ -7,7 +7,7 @@ class RepairTests(unittest.TestCase):
             "Goblin": "Goblin",
             "Hello there": "Hola",
             "N-No!!": "¡" * 100,
-            "What is happening to me in this place?": "¿Qué?",
+            "What is happening to me in this strange place?": "¿Qué?",
         }
         result = build_review(data)
         self.assertEqual(len(result), 2)
