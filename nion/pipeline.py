@@ -15,8 +15,10 @@ def scan(game_path):
     return data_dir, list(iter_entries(data_dir))
 
 
-def render(text, memory, protected_terms=(), glossary=None):
+def render(text, memory, protected_terms=(), glossary=None, ja_original_names=False):
     glossary = glossary or load_glossary()
+    if ja_original_names:
+        return render_ja_original_names(text, memory, glossary)
     prepared = normalize_names(text, glossary)
     if text in memory:
         return normalize_names(memory[text], glossary)
@@ -51,7 +53,7 @@ def render_ja_original_names(text, memory, glossary=None):
         "Erika": ("エリカ",),
         "Shiori": ("シオリ",),
         "Grant": ("グラント",),
-        "Kael": ("カエル", "ケイル"),
+        "Kael": ("ケイル",),
         "Ryou": ("リョウ", "リョー"),
         "Tama": ("タマ",),
     }
@@ -70,14 +72,14 @@ def render_ja_original_names(text, memory, glossary=None):
     return result
 
 
-def pending_texts(entries, memory, protected_terms=(), glossary=None):
+def pending_texts(entries, memory, protected_terms=(), glossary=None, ja_original_names=False):
     glossary = glossary or load_glossary()
     seen, out = set(), []
     for entry in entries:
         if entry.text not in seen:
             seen.add(entry.text)
             if needs_translation(entry.text) and render(
-                entry.text, memory, protected_terms, glossary
+                entry.text, memory, protected_terms, glossary, ja_original_names
             ) is None:
                 out.append(entry.text)
     return out
@@ -241,7 +243,7 @@ def _normalize_actor_names(out_dir, glossary):
 
 
 def apply_translations(game_path, out_dir, memory, log=print, glossary=None,
-                       textfit=False, textfit_width=48):
+                       textfit=False, textfit_width=48, ja_original_names=False):
     """No crea una salida parcial: exige todas las traducciones antes de copiar."""
     glossary = glossary or load_glossary()
     data_dir = find_data_dir(game_path)
@@ -256,7 +258,7 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None,
     for entry in iter_entries(data_dir):
         by_file.setdefault(entry.file, []).append(entry)
         if needs_translation(entry.text) and render(
-            entry.text, memory, protected_terms, glossary
+            entry.text, memory, protected_terms, glossary, ja_original_names
         ) is None:
             missing[entry.text] = 1
     if missing:
@@ -274,7 +276,7 @@ def apply_translations(game_path, out_dir, memory, log=print, glossary=None,
         data = load_json(os.path.join(data_dir, filename))
         changed = False
         for entry in entries:
-            translated = (render(entry.text, memory, protected_terms, glossary)
+            translated = (render(entry.text, memory, protected_terms, glossary, ja_original_names)
                           if needs_translation(entry.text) else None)
             if translated is not None:
                 _set_path(data, entry.path, translated)
