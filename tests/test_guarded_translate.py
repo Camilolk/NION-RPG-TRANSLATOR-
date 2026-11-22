@@ -47,6 +47,32 @@ class GuardedTests(unittest.TestCase):
     def test_untranslated_is_detected(self):
         self.assertIn("sin_traducir", review_alerts("N-No!!", "N-No!!"))
 
+    def test_qwen_only_for_quarantine(self):
+        class Qwen:
+            def __init__(self):
+                self.calls = []
+            def translate(self, text):
+                self.calls.append(text)
+                return "¡No!"
+        class BadRetry(FakeEngine):
+            def translate_repair(self, text, src, tgt):
+                return "¡" * 40
+        qwen = Qwen()
+        rows = translate_guarded(["No!", "Hello"], BadRetry(), qwen_engine=qwen)
+        self.assertEqual(qwen.calls, ["No!"])
+        self.assertEqual(rows[0]["estado"], "reparada")
+        self.assertEqual(rows[1]["estado"], "lista")
+
+    def test_qwen_invalid_keeps_quarantine(self):
+        class Qwen:
+            def translate(self, text):
+                return "¡" * 40
+        class BadRetry(FakeEngine):
+            def translate_repair(self, text, src, tgt):
+                return "¡" * 40
+        rows = translate_guarded(["No!"], BadRetry(), qwen_engine=Qwen())
+        self.assertEqual(rows[0]["estado"], "cuarentena")
+
     def test_empty_batch(self):
         self.assertEqual(translate_guarded([], FakeEngine()), [])
 
