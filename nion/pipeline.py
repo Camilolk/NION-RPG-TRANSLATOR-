@@ -110,7 +110,7 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                           "expansion_extrema", "reduccion_extrema",
                           "codigos_diferentes", "marcadores_diferentes"}
                 problems = severe.intersection(inspect_quality(core, translated))
-                if problems and hasattr(engine, "translate_repair"):
+                if problems and engine.name == "ct2-multi" and hasattr(engine, "translate_repair"):
                     try:
                         retried = engine.translate_repair(core, src, tgt)
                         retry_problems = severe.intersection(inspect_quality(core, retried))
