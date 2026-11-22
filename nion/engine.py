@@ -323,6 +323,69 @@ class MarianEngine(Engine):
             raise EngineError("MarianMT no pudo traducir el lote: %s" % error) from error
 
 
+
+class CTranslate2PortugueseEngine(Engine):
+    """CT2 INT8 opcional, exclusivamente inglés -> portugués."""
+    name = "ct2-pt"
+    max_batch = 16
+    supports_masking = False
+
+    def __init__(self, model_dir="models/ct2_en_romance"):
+        self.model_dir = model_dir
+        self._tokenizer = None
+        self._translator = None
+
+    def _load(self):
+        if self._translator is not None:
+            return
+        try:
+            import ctranslate2
+            from transformers import MarianTokenizer
+            from pathlib import Path
+        except ImportError as error:
+            raise EngineError("Instala ctranslate2 y transformers para ct2-pt.") from error
+        if not (Path(self.model_dir) / "model.bin").is_file():
+            raise EngineError(
+                "No existe el modelo CT2 convertido en %s. "
+                "Ejecuta primero python -m nion.benchmark_ct2_pt JUEGO." % self.model_dir
+            )
+        try:
+            self._tokenizer = MarianTokenizer.from_pretrained(
+                "Helsinki-NLP/opus-mt-en-ROMANCE")
+            self._translator = ctranslate2.Translator(
+                self.model_dir, device="cpu", compute_type="int8")
+        except Exception as error:
+            raise EngineError("No se pudo cargar CT2 portugués: %s" % error) from error
+
+    def translate_batch(self, texts, src, tgt):
+        if src.lower().replace("_", "-") != "en" or tgt.lower().replace("_", "-") != "pt-br":
+            raise EngineError("ct2-pt solo permite en -> pt-br.")
+        if not texts:
+            return []
+        self._load()
+        try:
+            inputs = [
+                self._tokenizer.convert_ids_to_tokens(
+                    self._tokenizer.encode(">>pt<< " + text, truncation=True, max_length=512)
+                )
+                for text in texts
+            ]
+            outputs = self._translator.translate_batch(
+                inputs, beam_size=1, max_decoding_length=512)
+            results = [
+                self._tokenizer.convert_tokens_to_string(item.hypotheses[0])
+                .replace("</s>", "").strip()
+                for item in outputs
+            ]
+            if len(results) != len(texts):
+                raise EngineError("CT2 portugués devolvió un lote incompleto.")
+            return results
+        except EngineError:
+            raise
+        except Exception as error:
+            raise EngineError("Error traduciendo con CT2 portugués: %s" % error) from error
+
+
 class M2M100Engine(Engine):
     """Traducción multilingüe local con M2M100 (CPU)."""
     name = "m2m100"
@@ -394,8 +457,10 @@ def get_engine(name, key=None, url=None):
         return DeepLEngine(key)
     if name == "marian":
         return MarianEngine()
+    if name == "ct2-pt":
+        return CTranslate2PortugueseEngine()
     if name == "m2m100":
         return M2M100Engine()
     if name == "llamacpp":
         return LlamaCppEngine(url or "http://127.0.0.1:8080")
-    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp, marian, m2m100)" % name)
+    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp, marian, m2m100, ct2-pt)" % name)
