@@ -507,10 +507,13 @@ def get_engine(name, key=None, url=None):
         return DeepLEngine(key)
     if name == "marian":
         return MarianEngine()
+    if name == "ct2-multi":
+        from .ct2_multi import CT2MultiEngine
+        return CT2MultiEngine()
     if name == "ct2-pt":
         return CTranslate2PortugueseEngine()
     if name == "m2m100":
         return M2M100Engine()
     if name == "llamacpp":
         return LlamaCppEngine(url or "http://127.0.0.1:8080")
-    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp, marian, m2m100, ct2-pt)" % name)
+    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp, marian, m2m100, ct2-pt, ct2-multi)" % name)
