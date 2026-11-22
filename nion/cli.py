@@ -44,6 +44,8 @@ def main(argv=None):
     all_parser.add_argument("game", help="carpeta original data_ingles")
     all_parser.add_argument("--out", default="nion_multilingual", help="carpeta base de resultados")
     all_parser.add_argument("--es-memory", help="memoria española ya existente (solo lectura para español)")
+    all_parser.add_argument("--fast", action="store_true",
+                            help="usar CT2 INT8 para fr/de/it/ru/zh; japonés sigue con Marian")
     all_parser.add_argument("--textfit", action="store_true", help="ajustar diálogos en las copias")
     all_parser.add_argument("--no-apply", action="store_true", help="solo crear memorias, sin exportar")
     all_parser.add_argument("--langs", default="es,fr,de,it,ru,pt-br,ja,zh",
