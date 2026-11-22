@@ -53,13 +53,13 @@ def fidelity_warnings(source, candidate):
     src = source.casefold()
     dst = candidate.casefold()
     # Caso real: 'And die!' convertido en 'y muevete'.
-    if re.search(r"\\bdie\\b", src) and not re.search(
-        r"\\b(morir|muere|mueran|muera|mueras|mueran|muerte|morirse|morira|moriran|moriras|fallec|muri|murio|muries)\\w*\\b", dst
+    if re.search(r"\bdie\b", src) and not re.search(
+        r"\b(morir|muere|mueran|muera|mueras|mueran|muerte|morirse|morira|moriran|moriras|fallec|muri|murio|muries)\w*\b", dst
     ):
         alerts.append("muerte_omitida_posible")
     # 'N-No' -> '¡No!' pierde el tartamudeo.
-    if re.search(r"(?i)\\b([a-z])-\\1[a-z]+", source) and not re.search(
-        r"(?i)\\b([a-záéíóúñ])-\\1", candidate
+    if re.search(r"(?i)\b([a-z])-\1[a-z]+", source) and not re.search(
+        r"(?i)\b([a-záéíóúñ])-\1", candidate
     ):
         alerts.append("tartamudeo_perdido_posible")
     # Avisar sobre preguntas sin signo de apertura (sin corregir automaticamente).
