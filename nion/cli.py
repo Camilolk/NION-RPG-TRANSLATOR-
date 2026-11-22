@@ -23,7 +23,7 @@ def main(argv=None):
     common(scan_parser)
     translate_parser = sub.add_parser("translate", help="traduce lo que falta y lo guarda en la memoria")
     common(translate_parser)
-    translate_parser.add_argument("--engine", default="deepl", help="echo | deepl | llamacpp | marian | m2m100")
+    translate_parser.add_argument("--engine", default="deepl", help="echo | deepl | llamacpp | marian | m2m100 | ct2-pt")
     translate_parser.add_argument("--key", default=os.environ.get("NION_DEEPL_KEY"))
     translate_parser.add_argument("--url", default=os.environ.get(
         "NION_LLAMACPP_URL", "http://127.0.0.1:8080"),
