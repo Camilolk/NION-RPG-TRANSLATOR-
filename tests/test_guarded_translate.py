@@ -73,6 +73,11 @@ class GuardedTests(unittest.TestCase):
         rows = translate_guarded(["No!"], BadRetry(), qwen_engine=Qwen())
         self.assertEqual(rows[0]["estado"], "cuarentena")
 
+    def test_second_question_missing_opening_mark(self):
+        source = "Did it work? And the device?"
+        candidate = "¿Funcionó? Y qué tal el dispositivo?"
+        self.assertIn("interrogacion_sin_apertura", review_alerts(source, candidate))
+
     def test_empty_batch(self):
         self.assertEqual(translate_guarded([], FakeEngine()), [])
 
