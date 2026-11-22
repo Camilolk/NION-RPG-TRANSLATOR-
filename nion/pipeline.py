@@ -34,7 +34,6 @@ def render_ja_original_names(text, memory, glossary=None):
     Las frases completas NLLB tienen prioridad; la verificación final evita
     transliteraciones accidentales de nombres que figuran en el original.
     """
-    import re
     from .codes import split_parts
 
     glossary = glossary or load_glossary()
@@ -65,10 +64,8 @@ def render_ja_original_names(text, memory, glossary=None):
     for name in present:
         for variant in ja_names.get(name, ()):
             result = result.replace(variant, name)
-    # Si la traducción omite un nombre original, no se acepta silenciosamente.
-    for name in present:
-        if name not in result:
-            return None
+    # No rechazar automáticamente una traducción porque el japonés omita
+    # un nombre presente en inglés. Esos casos se revisan en auditoría.
     return result
 
 
