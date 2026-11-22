@@ -8,6 +8,7 @@ Nunca importa memorias Marian antiguas. No exporta ni modifica el juego.
 --limit limita los segmentos nuevos examinados en esta ejecución (0 = todos).
 """
 import argparse
+import json
 import os
 import re
 
@@ -74,6 +75,7 @@ def main():
     p.add_argument("--limit", type=int, default=300, help="Máximo de segmentos nuevos (0 = todos)")
     p.add_argument("--batch-size", type=int, default=4)
     p.add_argument("--save-every", type=int, default=32)
+    p.add_argument("--retry-rejected", action="store_true")
     args = p.parse_args()
     if args.limit < 0 or not 1 <= args.batch_size <= 8 or args.save_every < 1:
         p.error("limit >= 0, batch-size 1..8, save-every >= 1")
@@ -87,7 +89,18 @@ def main():
         p.error("La ruta de memoria no es un archivo")
     glossary = load_glossary()
     memory = Memory(mem_path)
+    rejected_path = mem_path + ".rejected.json"
+    rejected_data = {}
+    if os.path.isfile(rejected_path):
+        with open(rejected_path, encoding="utf-8") as fh:
+            rejected_data = json.load(fh)
+        if not isinstance(rejected_data, dict):
+            p.error("Registro de rechazos inválido")
     segments = collect(data_dir, memory, glossary)
+    if not args.retry_rejected:
+        skipped = sum(source in rejected_data for source in segments)
+        segments = [source for source in segments if source not in rejected_data]
+        print("Rechazados previos omitidos:", skipped)
     print("Memoria NLLB:", mem_path)
     print("Segmentos nuevos pendientes:", len(segments))
     if not segments:
@@ -106,6 +119,13 @@ def main():
         p.error("No se encontró jpn_Jpan")
     os.makedirs(os.path.dirname(mem_path), exist_ok=True)
     done = accepted = rejected = 0
+    def save_progress():
+        memory.save()
+        tmp = rejected_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(rejected_data, fh, ensure_ascii=False, indent=2)
+        os.replace(tmp, rejected_path)
+
     try:
         for offset in range(0, len(selected), args.batch_size):
             chunk = selected[offset:offset + args.batch_size]
@@ -132,7 +152,10 @@ def main():
                     # Evitar que un segmento extremo interrumpa los demás.
                     print("  Lote omitido por longitud >512 tokens:", offset)
                     rejected += len(chunk)
+                    for source in chunk:
+                        rejected_data[source] = ["longitud_mayor_512_tokens"]
                     done += len(chunk)
+                    save_progress()
                     continue
                 with torch.inference_mode():
                     ids = model.generate(**inputs, forced_bos_token_id=target,
@@ -155,20 +178,24 @@ def main():
                 issues = check(source, translated) if valid else ["marcador_perdido"]
                 if issues:
                     rejected += 1
+                    rejected_data[source] = issues
                     print("  PENDIENTE:", source[:75], "|", ", ".join(issues))
                 else:
                     memory.set(source, translated)
+                    rejected_data.pop(source, None)
                     accepted += 1
             done += len(chunk)
             if done % args.save_every < args.batch_size or done == len(selected):
-                memory.save()
+                save_progress()
                 print("  Procesados %d/%d | guardados %d | pendientes %d" %
                       (done, len(selected), accepted, rejected), flush=True)
     finally:
         # Ctrl+C o error: preservar los lotes ya aceptados.
-        memory.save()
-        print("Memoria guardada. Nuevos aceptados:", accepted,
+        save_progress()
+        print("Memoria y rechazos guardados. Nuevos aceptados:", accepted,
               "| rechazados en esta pasada:", rejected)
+    print("Rechazos acumulados:", len(rejected_data))
+    print("Para reintentar rechazos, añade --retry-rejected.")
     print("Para continuar ejecuta el mismo comando con --memory igual.")
     print("No se modificaron archivos del juego ni la memoria japonesa antigua.")
 
