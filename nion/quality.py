@@ -26,7 +26,7 @@ def inspect(source, translated, target_lang=None):
     # El chino condensa más información por carácter. La longitud por sí sola
     # no justifica rechazarlo con el umbral diseñado para lenguas alfabéticas.
     # Solo una salida casi vacía se considera reducción extrema en zh.
-    if target_lang == "zh":
+    if target_lang in {"zh", "ja"}:
         if len(source) >= 40 and len(translated.strip()) <= 2:
             issues.append("reduccion_extrema")
     elif len(source) >= 40 and len(translated) < len(source) * .25:
