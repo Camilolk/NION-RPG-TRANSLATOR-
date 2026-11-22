@@ -17,20 +17,33 @@ class LocalGGUF:
                          n_threads=n_threads, n_gpu_layers=0, verbose=False)
 
     def translate(self, source):
-        prompt = (
-            "You are a professional RPG dialogue translator. Translate from English "
-            "to natural Latin American Spanish. Preserve every statement, question, "
-            "speaker perspective, name, and technical code. Never summarize, omit "
-            "questions, or invent details. Use consistent Spanish verb forms and "
-            "opening question/exclamation marks. Preserve stuttering and pauses "
-            "where meaningful. Return only the translation.\\n"
-            "English: " + source + "\\nSpanish:"
+        """Qwen Instruct: usar su plantilla chat, no completado libre."""
+        system = (
+            "You translate RPG dialogue from English to natural Latin American Spanish. "
+            "Translate every clause and question faithfully, without adding anything. "
+            "Preserve game control codes, names, pauses and stuttering. "
+            "Use correct Spanish punctuation and consistent verb forms. "
+            "Return only the translated dialogue; no examples, notes or labels."
         )
-        result = self.llm.create_completion(
-            prompt=prompt, max_tokens=256, temperature=0.1,
-            repeat_penalty=1.2, stop=["\nEnglish:", "\n\n"]
+        result = self.llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": source},
+            ],
+            max_tokens=128, temperature=0.0, top_p=0.9,
+            repeat_penalty=1.15,
         )
-        return result["choices"][0]["text"].strip()
+        candidate = result["choices"][0]["message"]["content"].strip()
+        # Never accept a generated transcript or an unfinished answer.
+        if result["choices"][0].get("finish_reason") == "length":
+            raise ValueError("Respuesta truncada por limite de tokens")
+        if any(token in candidate for token in (
+            "English:", "Spanish:", "Translation:", "<|im_start|>", "<|im_end|>"
+        )):
+            raise ValueError("El modelo genero ejemplos o etiquetas adicionales")
+        if "\\n" in candidate:
+            raise ValueError("El modelo genero secuencias de salto de linea literales")
+        return candidate
 
 def review(rows, engine, limit=5):
     result = [dict(row) for row in rows]
