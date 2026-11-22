@@ -228,6 +228,9 @@ class MarianEngine(Engine):
         ("en", "de"): "Helsinki-NLP/opus-mt-en-de",
         ("en", "it"): "Helsinki-NLP/opus-mt-en-it",
         ("en", "ru"): "Helsinki-NLP/opus-mt-en-ru",
+        ("en", "pt-br"): "Helsinki-NLP/opus-mt-tc-big-en-pt",
+        ("en", "ja"): "Helsinki-NLP/opus-mt-en-jap",
+        ("en", "zh"): "Helsinki-NLP/opus-mt-en-zh",
     }
 
     def __init__(self, model_id=None):
@@ -271,13 +274,20 @@ class MarianEngine(Engine):
             self._model = None
             self._active_pair = pair
 
+    @staticmethod
+    def _prepare_texts(texts, tgt):
+        # Chinese model is multilingual: force Simplified Mandarin.
+        if tgt.lower().replace("_", "-") == "zh":
+            return [">>cmn_Hans<< " + text for text in texts]
+        return texts
+
     def translate_repair(self, text, src="en", tgt="es"):
         """Decodificacion alternativa, solo para reparaciones solicitadas."""
         self._select_pair(src, tgt)
         self._load()
         import torch
         inputs = self._tokenizer(
-            [text], return_tensors="pt", padding=True,
+            self._prepare_texts([text], tgt), return_tensors="pt", padding=True,
             truncation=True, max_length=512
         )
         with torch.inference_mode():
@@ -296,7 +306,7 @@ class MarianEngine(Engine):
         import torch
         try:
             inputs = self._tokenizer(
-                texts, return_tensors="pt", padding=True, truncation=True,
+                self._prepare_texts(texts, tgt), return_tensors="pt", padding=True, truncation=True,
                 max_length=512
             )
             with torch.inference_mode():
