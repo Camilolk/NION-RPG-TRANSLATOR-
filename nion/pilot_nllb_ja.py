@@ -6,9 +6,19 @@ import argparse
 import json
 import os
 import time
+import re
 from .codes import CODE_RE, text_segments
 from .extract import find_data_dir, iter_entries
 from .ja_sentences import split_sentences_safe
+
+# Etiquetas de categoría verificadas en el piloto; no se envían al modelo.
+CATEGORY_LABELS = {
+    "[General Equipment]": "[一般装備]",
+    "[Large Shield]": "[大盾]",
+    "[Accessory]": "[アクセサリー]",
+}
+CATEGORY_RE = re.compile(r"^(\\s*)(\\[[A-Za-z][A-Za-z ]{0,40}\\])(\\s*)")
+
 
 
 def main():
@@ -51,8 +61,16 @@ def main():
 
     # Cada oración se traduce individualmente, pero se ejecuta en lotes.
     pieces, owners = [], []
+    prefixes = [""] * len(sources)
     for index, source in enumerate(sources):
-        for piece in split_sentences_safe(source):
+        body = source
+        label_match = CATEGORY_RE.match(source)
+        if label_match and label_match.group(2) in CATEGORY_LABELS:
+            prefixes[index] = (label_match.group(1)
+                               + CATEGORY_LABELS[label_match.group(2)]
+                               + label_match.group(3))
+            body = source[label_match.end():]
+        for piece in split_sentences_safe(body):
             if piece.strip():
                 pieces.append(piece.strip())
                 owners.append(index)
@@ -74,7 +92,7 @@ def main():
         grouped[owner].append(result.strip())
     rows = []
     for i, (source, fragments) in enumerate(zip(sources, grouped), 1):
-        target_text = "".join(fragments)
+        target_text = prefixes[i-1] + "".join(fragments)
         # Indicador heurístico, no evaluación semántica.
         suspicious = len(source) >= 50 and len(target_text) < max(6, int(len(source) * 0.17))
         rows.append({"id": i, "en": source, "ja": target_text,
