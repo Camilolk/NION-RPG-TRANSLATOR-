@@ -9,7 +9,7 @@ from .pipeline import scan, pending_texts, translate_pending, apply_translations
 LANG_ENGINES = {
     "es": "marian", "fr": "marian", "de": "marian",
     "it": "marian", "ru": "marian",
-    "pt-br": "m2m100", "ja": "m2m100", "zh": "m2m100",
+    "pt-br": "marian", "ja": "marian", "zh": "marian",
 }
 
 def run_all(args):
