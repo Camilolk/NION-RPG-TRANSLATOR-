@@ -22,7 +22,8 @@ def render(text, memory, protected_terms=(), glossary=None):
         return normalize_names(memory[text], glossary)
     if prepared in memory:
         return normalize_names(memory[prepared], glossary)
-    return compose_from_segments(prepared, memory, protected_terms)
+    return (compose_from_segments(prepared, memory, protected_terms)
+            or compose_from_segments(prepared, memory, ()))
 
 
 def pending_texts(entries, memory, protected_terms=(), glossary=None):
