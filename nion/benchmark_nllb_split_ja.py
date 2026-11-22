@@ -15,7 +15,7 @@ SAMPLES = [
 ]
 # Dividir solo en puntuación final seguida de espacio y mayúscula.
 # Evitar puntos suspensivos y abreviaturas en este experimento.
-BOUNDARY = re.compile(r"(?<=[!?])\\s+(?=[A-Z])|(?<!\\.)\\.(?!\\.)\\s+(?=[A-Z])")
+BOUNDARY = re.compile(r"(?<=[!?])\s+(?=[A-Z])|(?<!\.)\.(?!\.)\s+(?=[A-Z])")
 
 def main():
     import torch
