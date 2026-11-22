@@ -398,6 +398,36 @@ class CTranslate2PortugueseEngine(Engine):
                               .replace("</s>", "").strip())
                 if not translated:
                     raise EngineError("CT2 portugués devolvió texto vacío.")
+                # Conservative pt-BR spelling and phrasing adjustments.
+                # Do not alter RPG labels or escape codes in the preserved prefix.
+                import re
+                brazilian_words = {
+                    "demónio": "demônio",
+                    "demónios": "demônios",
+                    "económico": "econômico",
+                    "económica": "econômica",
+                    "académico": "acadêmico",
+                    "académica": "acadêmica",
+                    "fenómeno": "fenômeno",
+                    "fenómenos": "fenômenos",
+                    "género": "gênero",
+                    "géneros": "gêneros",
+                }
+                def brazilianize(match):
+                    word = match.group(0)
+                    replacement = brazilian_words[word.lower()]
+                    if word.isupper():
+                        return replacement.upper()
+                    if word[0].isupper():
+                        return replacement.capitalize()
+                    return replacement
+                translated = re.sub(
+                    r"\\b(?:" + "|".join(map(re.escape, brazilian_words)) + r")\\b",
+                    brazilianize, translated, flags=re.IGNORECASE)
+                translated = re.sub(
+                    r"\\b([Tt]emos) de (?=[a-zà-ú])",
+                    lambda match: match.group(1) + " que ",
+                    translated)
                 output[index] = prefix + translated
             return output
         except EngineError:
