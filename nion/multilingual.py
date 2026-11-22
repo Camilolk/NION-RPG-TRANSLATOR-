@@ -59,6 +59,11 @@ def run_all(args):
             print("PENDIENTES %s: %d; se omite exportación." % (lang, len(remaining)))
             failed.append(lang)
             continue
+        if lang == "ja":
+            print("JAPONÉS EN CUARENTENA: la memoria existente contiene traducciones"
+                  " incoherentes; no se exporta automáticamente.")
+            failed.append(lang)
+            continue
         if args.no_apply:
             print("Memoria completa:", path)
             continue
