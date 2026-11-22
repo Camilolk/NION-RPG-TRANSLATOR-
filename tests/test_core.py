@@ -210,14 +210,16 @@ class Tests(unittest.TestCase):
     def test_apply_never_touches_original(self):
         root = os.path.join(self.root, "g")
         d = make_game(root)
-        before = open(d + "/Items.json", encoding="utf-8").read()
+        with open(d + "/Items.json", encoding="utf-8") as file:
+            before = file.read()
         mem = Memory(os.path.join(self.root, "m.json"))
         _, entries = scan(root)
         translate_pending(entries, mem, EchoEngine(), "en", "es", log=lambda *_: None,
                           protected_terms=protected_names(d))
         out = os.path.join(self.root, "out")
         applied, missing = apply_translations(root, out, mem, log=lambda *_: None)
-        self.assertEqual(open(d + "/Items.json", encoding="utf-8").read(), before)
+        with open(d + "/Items.json", encoding="utf-8") as file:
+            self.assertEqual(file.read(), before)
         self.assertEqual(read(out + "/Items.json")[1]["name"], "[ES] Potion")
         self.assertEqual(read(out + "/MapInfos.json")[1]["name"], "editor only")
         self.assertGreater(applied, 5)
