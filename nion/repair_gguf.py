@@ -1,6 +1,7 @@
 """Reparacion opcional con un modelo GGUF local, sin servidor."""
 import argparse
 import json
+import time
 from pathlib import Path
 from .quality import inspect
 from .repair import SEVERE
@@ -17,10 +18,13 @@ class LocalGGUF:
 
     def translate(self, source):
         prompt = (
-            "Translate the following RPG dialogue from English to natural Latin American "
-            "Spanish. Preserve the complete meaning, all questions, and technical codes. "
-            "Do not add commentary. Output only the Spanish translation.\n"
-            "English: " + source + "\nSpanish:"
+            "You are a professional RPG dialogue translator. Translate from English "
+            "to natural Latin American Spanish. Preserve every statement, question, "
+            "speaker perspective, name, and technical code. Never summarize, omit "
+            "questions, or invent details. Use consistent Spanish verb forms and "
+            "opening question/exclamation marks. Preserve stuttering and pauses "
+            "where meaningful. Return only the translation.\\n"
+            "English: " + source + "\\nSpanish:"
         )
         result = self.llm.create_completion(
             prompt=prompt, max_tokens=256, temperature=0.1,
@@ -37,6 +41,7 @@ def review(rows, engine, limit=5):
         if not row.get("original") or row.get("aprobado"):
             continue
         # Comparar incluso propuestas sin alertas, pues las heuristicas no son infalibles.
+        started = time.perf_counter()
         try:
             candidate = engine.translate(row["original"])
             warnings = sorted(SEVERE.intersection(inspect(row["original"], candidate)))
@@ -47,8 +52,11 @@ def review(rows, engine, limit=5):
         except Exception as error:
             row["estado_gguf"] = "error"
             row["error_gguf"] = str(error)[:300]
+        finally:
+            row["segundos_gguf"] = round(time.perf_counter() - started, 3)
         processed += 1
-        print("GGUF:", processed, "/", limit, "|", row["estado_gguf"])
+        print("GGUF:", processed, "/", limit, "|", row["estado_gguf"],
+              "|", row["segundos_gguf"], "s")
     return result
 
 def main(argv=None):
@@ -73,6 +81,10 @@ def main(argv=None):
     result = review(rows, LocalGGUF(model, n_threads=args.threads), args.limit)
     with output.open("x", encoding="utf-8") as fh:
         json.dump(result, fh, ensure_ascii=False, indent=2)
+    tiempos = [r["segundos_gguf"] for r in result if "segundos_gguf" in r]
+    if tiempos:
+        print("Tiempo total de inferencia:", round(sum(tiempos), 2), "s",
+              "| promedio:", round(sum(tiempos) / len(tiempos), 2), "s/texto")
     print("Informe:", output, "| Memoria original intacta.")
     return 0
 
