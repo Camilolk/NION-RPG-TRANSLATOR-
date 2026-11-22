@@ -1,10 +1,26 @@
 """Traduccion por lotes con reintento selectivo y cuarentena de errores."""
 from .quality import inspect
+from .repair_propose import semantic_warnings
+from .repair_gguf import fidelity_warnings
 
 BLOCKING = frozenset({
     "traduccion_vacia", "repeticion_anomala", "expansion_extrema",
     "reduccion_extrema", "codigos_diferentes", "marcadores_diferentes",
+    "preguntas_omitidas_posibles", "sin_traducir", "tartamudeo_perdido_posible",
 })
+
+
+def review_alerts(source, candidate):
+    """Combina calidad, cobertura de preguntas y fidelidad sin afirmar equivalencia."""
+    if not isinstance(candidate, str):
+        return ["traduccion_vacia"]
+    alerts = set(inspect(source, candidate))
+    alerts.update(semantic_warnings(source, candidate))
+    alerts.update(fidelity_warnings(source, candidate))
+    # Contar solo signos de cierre: el signo español de apertura no es otra pregunta.
+    if source.count("?") > candidate.count("?"):
+        alerts.add("preguntas_omitidas_posibles")
+    return sorted(alerts)
 
 
 def translate_guarded(texts, engine, src="en", tgt="es"):
@@ -29,7 +45,7 @@ def translate_guarded(texts, engine, src="en", tgt="es"):
             if blocking and hasattr(engine, "translate_repair"):
                 try:
                     retry = engine.translate_repair(source, src, tgt)
-                    retry_alerts = sorted(set(inspect(source, retry)))
+                    retry_alerts = sorted(set(review_alerts(source, retry)))
                     # Aceptar solo si desaparecen TODOS los bloqueos.
                     if not BLOCKING.intersection(retry_alerts):
                         final, alerts = retry, retry_alerts
