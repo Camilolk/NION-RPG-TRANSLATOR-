@@ -43,7 +43,20 @@ def main(argv=None):
     all_parser.add_argument("--no-apply", action="store_true", help="solo crear memorias, sin exportar")
     all_parser.add_argument("--langs", default="es,fr,de,it,ru,pt-br,ja,zh",
                             help="idiomas separados por comas")
+    bench_parser = sub.add_parser("benchmark", help="mide traducción con textos reales sin guardar memorias")
+    bench_parser.add_argument("game", help="carpeta original data_ingles")
+    bench_parser.add_argument("--samples", type=int, default=200, help="segmentos por idioma")
+    bench_parser.add_argument("--langs", default="fr,de,it,ru,pt-br,ja,zh")
     args = parser.parse_args(argv)
+    if args.cmd == "benchmark":
+        from .benchmark import run_benchmark
+        try:
+            if args.samples < 1 or args.samples > 1000:
+                raise ValueError("--samples debe estar entre 1 y 1000")
+            return run_benchmark(args)
+        except (EngineError, FileNotFoundError, ValueError, OSError) as error:
+            print("ERROR:", error, file=sys.stderr)
+            return 1
     if args.cmd == "translate-all":
         from .multilingual import run_all
         try:
