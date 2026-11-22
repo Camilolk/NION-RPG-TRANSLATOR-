@@ -8,6 +8,18 @@ from pathlib import Path
 from .engine import MarianEngine
 from .guarded_translate import translate_guarded
 
+
+class LazyQwen:
+    """Cargar GGUF solo si una traduccion llega a cuarentena."""
+    def __init__(self, model, threads):
+        self.model, self.threads, self.engine = model, threads, None
+
+    def translate(self, source):
+        if self.engine is None:
+            from .repair_gguf import LocalGGUF
+            self.engine = LocalGGUF(self.model, n_threads=self.threads)
+        return self.engine.translate(source)
+
 SAMPLES = [
     "N-No!!",
     "Shut UP!!! And die!!!",
@@ -22,7 +34,13 @@ def main(argv=None):
     parser.add_argument("--input", help="JSON con lista de textos originales (opcional)")
     parser.add_argument("--limit", type=int, default=5)
     parser.add_argument("--out", default="nion_guarded_benchmark.json")
+    parser.add_argument("--gguf", help="Modelo Qwen GGUF opcional para cuarentena")
+    parser.add_argument("--threads", type=int, default=4)
     args = parser.parse_args(argv)
+    if not 1 <= args.threads <= 64:
+        parser.error("--threads debe estar entre 1 y 64")
+    if args.gguf and not Path(args.gguf).is_file():
+        parser.error("No existe el modelo GGUF")
     if args.limit < 1:
         parser.error("--limit debe ser mayor que cero")
     output = Path(args.out).resolve()
@@ -39,7 +57,8 @@ def main(argv=None):
         texts = SAMPLES
     texts = texts[:args.limit]
     started = time.perf_counter()
-    rows = translate_guarded(texts, MarianEngine())
+    qwen = LazyQwen(args.gguf, args.threads) if args.gguf else None
+    rows = translate_guarded(texts, MarianEngine(), qwen_engine=qwen)
     elapsed = round(time.perf_counter() - started, 2)
     counts = Counter(row["estado"] for row in rows)
     report = {
@@ -47,6 +66,7 @@ def main(argv=None):
         "segundos": elapsed,
         "total": len(rows),
         "reintentos": sum(bool(row["reintento"]) for row in rows),
+        "qwen_usados": sum(bool(row.get("qwen_usado")) for row in rows),
         "estados": dict(counts),
         "resultados": rows,
     }
@@ -54,6 +74,7 @@ def main(argv=None):
         json.dump(report, file, ensure_ascii=False, indent=2)
     print("Textos:", len(rows), "| Reintentos:", report["reintentos"])
     print("Estados:", dict(counts), "| Segundos:", elapsed)
+    print("Qwen usado:", report["qwen_usados"])
     for i, row in enumerate(rows, 1):
         print(f"CASO {i}: {row['estado']} | {row['alertas']}")
     print("Informe:", output)
