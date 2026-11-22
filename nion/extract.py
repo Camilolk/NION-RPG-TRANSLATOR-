@@ -9,13 +9,13 @@ Entry = namedtuple("Entry", "file path text")
 
 DB_FIELDS = {
     "Actors": ("nickname", "profile"),
-    "Armors": ("name", "description"),
-    "Classes": ("name",),
-    "Enemies": ("name",),
-    "Items": ("name", "description"),
-    "Skills": ("name", "description", "message1", "message2"),
-    "States": ("name", "message1", "message2", "message3", "message4"),
-    "Weapons": ("name", "description"),
+    "Armors": ("description",),
+    "Classes": (),
+    "Enemies": (),
+    "Items": ("description",),
+    "Skills": ("description", "message1", "message2"),
+    "States": ("message1", "message2", "message3", "message4"),
+    "Weapons": ("description",),
 }
 SYSTEM_LISTS = ("skillTypes", "weaponTypes", "armorTypes", "equipTypes")
 
