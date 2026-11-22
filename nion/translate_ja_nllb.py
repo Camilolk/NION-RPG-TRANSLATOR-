@@ -76,9 +76,13 @@ def main():
     p.add_argument("--batch-size", type=int, default=4)
     p.add_argument("--save-every", type=int, default=32)
     p.add_argument("--retry-rejected", action="store_true")
+    p.add_argument("--beams", type=int, default=4,
+                   help="Haces NLLB: 4 = calidad anterior, 1 = más rápido pero puede omitir contenido")
+    p.add_argument("--threads", type=int, default=0,
+                   help="Hilos CPU de PyTorch; 0 = automático")
     args = p.parse_args()
-    if args.limit < 0 or not 1 <= args.batch_size <= 8 or args.save_every < 1:
-        p.error("limit >= 0, batch-size 1..8, save-every >= 1")
+    if args.limit < 0 or not 1 <= args.batch_size <= 8 or args.save_every < 1 or not 1 <= args.beams <= 4 or not 0 <= args.threads <= 32:
+        p.error("limit >= 0, batch-size 1..8, save-every >= 1, beams 1..4, threads 0..32")
     data_dir = os.path.abspath(find_data_dir(args.game))
     mem_path = os.path.abspath(args.memory)
     if os.path.commonpath([data_dir, mem_path]) == data_dir:
@@ -111,6 +115,9 @@ def main():
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
     except ImportError:
         p.error("Faltan torch, transformers o sentencepiece")
+    if args.threads:
+        torch.set_num_threads(args.threads)
+    print("NLLB: beams=%d, hilos CPU=%s" % (args.beams, args.threads or "automático"), flush=True)
     tokenizer = AutoTokenizer.from_pretrained("facebook/nllb-200-distilled-600M", src_lang="eng_Latn")
     model = AutoModelForSeq2SeqLM.from_pretrained("facebook/nllb-200-distilled-600M")
     model.eval()
@@ -159,7 +166,7 @@ def main():
                     continue
                 with torch.inference_mode():
                     ids = model.generate(**inputs, forced_bos_token_id=target,
-                                         num_beams=4, max_new_tokens=160)
+                                         num_beams=args.beams, max_new_tokens=160)
                 outputs = tokenizer.batch_decode(ids, skip_special_tokens=True)
             iterator = iter(outputs)
             for source, prepared, terms, exact in candidates:
