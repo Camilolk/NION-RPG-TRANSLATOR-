@@ -54,6 +54,27 @@ def _translate_exact(engine, texts, src, tgt):
     return outputs
 
 
+def _translate_resilient(engine, texts, src, tgt, log):
+    """Aísla fallos de CT2 sin descartar traducciones sanas del mismo lote.
+
+    No inventa salidas para los textos fallidos: permanecen pendientes.
+    """
+    if not texts:
+        return []
+    try:
+        return _translate_exact(engine, texts, src, tgt)
+    except (EngineError, ValueError, RuntimeError) as error:
+        if engine.name != "ct2-multi":
+            raise
+        if len(texts) == 1:
+            log("  PENDIENTE por error CT2: %s | %s" %
+                (texts[0][:80], str(error)[:160]))
+            return [None]
+        midpoint = len(texts) // 2
+        return (_translate_resilient(engine, texts[:midpoint], src, tgt, log)
+                + _translate_resilient(engine, texts[midpoint:], src, tgt, log))
+
+
 def translate_pending(entries, memory, engine, src, tgt, log=print,
                       protected_terms=(), glossary=None):
     """Guarda memoria por lote; códigos y nombres oficiales quedan fuera del motor."""
@@ -103,9 +124,11 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                     segments.append(core)
         done = 0
         for chunk in _chunks(segments, engine.max_batch):
-            outputs = _translate_exact(engine, chunk, src, tgt)
+            outputs = _translate_resilient(engine, chunk, src, tgt, log)
             from .quality import inspect as inspect_quality
             for core, translated in zip(chunk, outputs):
+                if translated is None:
+                    continue
                 severe = {"traduccion_vacia", "repeticion_anomala",
                           "expansion_extrema", "reduccion_extrema",
                           "codigos_diferentes", "marcadores_diferentes"}
