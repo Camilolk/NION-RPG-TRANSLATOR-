@@ -11,7 +11,7 @@ PUNCT_RUN = re.compile(r"([!?¡¿.,])\1{7,}")
 WORD_RUN = re.compile(r"(?i)(\b[\wáéíóúñ]+\b)(?:\s+\1){5,}")
 LETTERS = re.compile(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]{4,}")
 
-def inspect(source, translated):
+def inspect(source, translated, target_lang=None):
     if not isinstance(translated, str) or not translated.strip():
         return ["traduccion_vacia"]
     issues = []
@@ -23,7 +23,13 @@ def inspect(source, translated):
         issues.append("repeticion_anomala")
     if len(source) >= 20 and len(translated) > len(source) * 3:
         issues.append("expansion_extrema")
-    if len(source) >= 40 and len(translated) < len(source) * .25:
+    # El chino condensa más información por carácter. La longitud por sí sola
+    # no justifica rechazarlo con el umbral diseñado para lenguas alfabéticas.
+    # Solo una salida casi vacía se considera reducción extrema en zh.
+    if target_lang == "zh":
+        if len(source) >= 40 and len(translated.strip()) <= 2:
+            issues.append("reduccion_extrema")
+    elif len(source) >= 40 and len(translated) < len(source) * .25:
         issues.append("reduccion_extrema")
     if source == translated and LETTERS.search(source):
         issues.append("sin_cambios_revisar")
