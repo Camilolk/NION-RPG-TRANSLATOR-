@@ -46,6 +46,26 @@ class CT2MultiEngine(Engine):
             raise EngineError("No se pudo abrir CT2 %s: %s" % (lang, exc)) from exc
         self._active = lang
 
+    def translate_repair(self, text, src, tgt):
+        """Segundo intento más conservador, sin modificar la memoria."""
+        lang = tgt.lower().replace("_", "-")
+        if src.lower() != "en" or lang not in self.SUPPORTED:
+            raise EngineError("Par de idiomas no admitido para reparación CT2.")
+        self._load(lang)
+        match = self.LABEL.match(text)
+        prefix = match.group(0) if match else ""
+        core = text[len(prefix):]
+        if not core.strip() or self.HEADER.fullmatch(text.strip()):
+            return text
+        language_prefix = ">>cmn_Hans<< " if lang == "zh" else ""
+        tokens = self._tokenizer.convert_ids_to_tokens(
+            self._tokenizer.encode(language_prefix + core, truncation=True, max_length=512))
+        result = self._translator.translate_batch(
+            [tokens], beam_size=4, repetition_penalty=1.25,
+            no_repeat_ngram_size=3, max_decoding_length=256)[0]
+        return prefix + self._tokenizer.convert_tokens_to_string(
+            result.hypotheses[0]).replace("</s>", "").strip()
+
     def translate_batch(self, texts, src, tgt):
         lang = tgt.lower().replace("_", "-")
         if src.lower() != "en" or lang not in self.SUPPORTED:
