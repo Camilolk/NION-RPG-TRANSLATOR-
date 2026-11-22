@@ -29,6 +29,11 @@ def main(argv=None):
         "NION_LLAMACPP_URL", "http://127.0.0.1:8080"),
         help="URL base del servidor llama.cpp")
     translate_parser.add_argument("--src", default="en")
+    review_parser = sub.add_parser("review", help="informe de traducciones pendientes sin modificar memoria")
+    common(review_parser)
+    review_parser.add_argument("--engine", default="ct2-pt")
+    review_parser.add_argument("--src", default="en")
+    review_parser.add_argument("--out", required=True, help="ruta de un informe JSON nuevo")
     apply_parser = sub.add_parser("apply", help="crea una COPIA completa traducida; nunca toca el original")
     common(apply_parser)
     apply_parser.add_argument("--out", help="carpeta de salida (por defecto <data>_<lang>)")
@@ -75,6 +80,13 @@ def main(argv=None):
             print("Entradas:", len(entries))
             print("Nombres protegidos:", len(names))
             print("Por traducir:", len(todo), "textos,", sum(map(len, todo)), "caracteres")
+        elif args.cmd == "review":
+            from .review import create_review
+            engine = get_engine(args.engine)
+            count, output = create_review(
+                entries, memory, engine, args.src, args.lang, args.out,
+                protected_terms=names, glossary=glossary)
+            print("Informe creado:", output, "| textos pendientes:", count)
         elif args.cmd == "translate":
             engine = get_engine(args.engine, args.key, args.url)
             translate_pending(entries, memory, engine, args.src, args.lang,
