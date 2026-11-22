@@ -4,16 +4,16 @@ import re
 from .codes import CODE_RE
 from .quality import TOKEN
 
-_BOUNDARY = re.compile(r"(?<=[!?])\\s+(?=[A-Za-z])")
+_BOUNDARY = re.compile(r"(?<=[!?])\s+(?=[A-Za-z])")
 
 
 def split_dialogue(source):
     """Solo separar dialogos simples; nunca dividir codigos o marcadores RPG."""
     if not isinstance(source, str) or CODE_RE.search(source) or TOKEN.search(source):
         return []
-    if "\\n" in source or "\\r" in source or "\\t" in source:
+    if "\n" in source or "\r" in source or "\t" in source:
         return []
-    if re.search(r"(?i)\\b([a-z])-\\1[a-z]+", source):
+    if re.search(r"(?i)\b([a-z])-\1[a-z]+", source):
         return []
     parts = _BOUNDARY.split(source)
     if not 2 <= len(parts) <= 5 or any(len(p.strip()) < 6 for p in parts):
