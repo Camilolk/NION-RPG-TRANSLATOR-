@@ -35,7 +35,22 @@ def main(argv=None):
     apply_parser.add_argument("--textfit", action="store_true", help="ajusta cuadros de diálogo 101/401")
     apply_parser.add_argument("--textfit-width", type=int, default=48, help="ancho estimado por línea (por defecto 48)")
 
+    all_parser = sub.add_parser("translate-all", help="traduce del inglés a ocho idiomas, con memorias separadas")
+    all_parser.add_argument("game", help="carpeta original data_ingles")
+    all_parser.add_argument("--out", default="nion_multilingual", help="carpeta base de resultados")
+    all_parser.add_argument("--es-memory", help="memoria española ya existente (solo lectura para español)")
+    all_parser.add_argument("--textfit", action="store_true", help="ajustar diálogos en las copias")
+    all_parser.add_argument("--no-apply", action="store_true", help="solo crear memorias, sin exportar")
+    all_parser.add_argument("--langs", default="es,fr,de,it,ru,pt-br,ja,zh",
+                            help="idiomas separados por comas")
     args = parser.parse_args(argv)
+    if args.cmd == "translate-all":
+        from .multilingual import run_all
+        try:
+            return run_all(args)
+        except (EngineError, FileNotFoundError, ValueError, OSError) as error:
+            print("ERROR:", error, file=sys.stderr)
+            return 1
     memory = Memory(args.memory or "nion_memory_%s.json" % args.lang.lower())
     try:
         data_dir, entries = scan(args.game)
