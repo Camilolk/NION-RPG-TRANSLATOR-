@@ -78,6 +78,20 @@ class GuardedTests(unittest.TestCase):
         candidate = "¿Funcionó? Y qué tal el dispositivo?"
         self.assertIn("interrogacion_sin_apertura", review_alerts(source, candidate))
 
+    def test_missing_opening_question_is_quarantined(self):
+        class Engine:
+            max_batch = 1
+            def translate_batch(self, texts, src, tgt):
+                return ["¿Funcionó? Y qué tal el dispositivo?"]
+        rows = translate_guarded(["Did it work? And the device?"], Engine())
+        self.assertEqual(rows[0]["estado"], "cuarentena")
+        self.assertIn("interrogacion_sin_apertura", rows[0]["alertas"])
+
+    def test_non_spanish_target_skips_spanish_punctuation_check(self):
+        source = "Did it work?"
+        candidate = "Est-ce que cela a marché?"
+        self.assertNotIn("interrogacion_sin_apertura", review_alerts(source, candidate, "fr"))
+
     def test_empty_batch(self):
         self.assertEqual(translate_guarded([], FakeEngine()), [])
 
