@@ -23,7 +23,7 @@ PAIRS = [
 ("O-Of course not. I just want you to relax. It's not weird to want that,", "も、もちろん違うよ。ただリラックスしてほしいだけだ。それを望むのは変なことじゃないし、"),
 ("What...!?! H-How dare you!!?! You took of my... bra...nnghh...!", "なっ……！？ よ、よくもそんなことを！！ 私の……ブラを外したなんて……んんっ……！"),
 ("(Huh... he actually did stop...)", "（あれ……本当にやめてくれた……）"),
-("A-Ahah... I accidentally consumed it the first time I used the Arca Purger... I'm sorry,", "あ、あはは……初めてアルカ・パージャーを使ったとき、うっかり使い切っちゃって……ごめんなさい、"),
+("A-Ahah... I accidentally consumed it the first time I used the Arca Purger... I'm sorry,", "あ、あはは……初めてArca Purgerを使ったとき、うっかり使い切っちゃって……ごめんなさい、"),
 ("Heheheh! Hell yeaah! Take your boobs out! Come on! I'll throw some gold in!", "へへへ！ いいぞぉ！ 胸を出してみろよ！ ほら！ 金貨も投げてやるぜ！"),
 ("He will! I'm sure of it! He just needs a little more time to get to know you.", "きっとそうするよ！ 間違いない！ 君のことをもっと知る時間が少し必要なだけだ。"),
 ("(Heh, finally. Let's see how far this goes.)", "（へっ、やっとだ。どこまで進むか見てみよう。）"),
@@ -49,7 +49,7 @@ PAIRS = [
 ("Aahhhnn... (H-He's touching my...!)", "あぁん……（か、彼が私の……に触ってる……！）"),
 ("Hey, hey, hey... just relax and take it. You're frustrated.", "おいおいおい……落ち着いて受け入れろよ。欲求不満なんだろ。"),
 ("Y-You mean... you want to give me a blowjob?", "つ、つまり……私にフェラをしてくれるってこと？"),
-("Ehehehe! Of course you couldn't! Gob smell you all over! Eheheh!", "えへへへ！ そりゃ無理だよ！ ゴブにはお前の匂いがぷんぷんするもん！ えへへ！"),
+("Ehehehe! Of course you couldn't! Gob smell you all over! Eheheh!", "えへへへ！ そりゃ無理だよ！ Gobにはお前の匂いがぷんぷんするもん！ えへへ！"),
 ]
 
 
