@@ -2,6 +2,7 @@
 from .quality import inspect
 from .repair_propose import semantic_warnings
 from .repair_gguf import fidelity_warnings
+from .segment_recovery import recover_segments
 
 BLOCKING = frozenset({
     "traduccion_vacia", "repeticion_anomala", "expansion_extrema",
@@ -65,6 +66,14 @@ def translate_guarded(texts, engine, src="en", tgt="es", qwen_engine=None):
                         final, alerts = proposal, proposal_alerts
                 except Exception as error:
                     qwen_error = str(error)[:200]
+            segmented = False
+            if BLOCKING.intersection(alerts):
+                recovered = recover_segments(source, engine, src, tgt, qwen_engine,
+                                             review_alerts, BLOCKING)
+                if recovered is not None:
+                    final, alerts, segments_used_qwen = recovered
+                    qwen_used = qwen_used or segments_used_qwen
+                    segmented = True
             results.append({
                 "original": source,
                 "traduccion": final,
@@ -74,5 +83,6 @@ def translate_guarded(texts, engine, src="en", tgt="es", qwen_engine=None):
                 "reintento": bool(blocking),
                 "qwen_usado": qwen_used,
                 "qwen_error": qwen_error,
+                "recuperacion_segmentada": segmented,
             })
     return results
