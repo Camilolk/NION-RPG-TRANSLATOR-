@@ -10,6 +10,11 @@
   "use strict";
   if (typeof Window_Message === "undefined") return;
   var proto = Window_Message.prototype;
+  var params = (typeof PluginManager !== "undefined" && PluginManager.parameters) ? PluginManager.parameters("NION_AutoWrap") : {};
+  var fontSize = Number(params.fontSize || 0);
+  if (fontSize >= 12 && fontSize <= 48) {
+    proto.standardFontSize = function () { return fontSize; };
+  }
   var original = proto.processNormalCharacter;
   if (typeof original !== "function") return;
 
@@ -35,10 +40,6 @@
     }
     if (state.x > state.left && state.x + width(this, piece) > limit) {
       this.processNewLine(state);
-      if (this.needsNewPage && this.needsNewPage(state)) {
-        this.startPause();
-        return;
-      }
     }
     original.call(this, state);
   };
