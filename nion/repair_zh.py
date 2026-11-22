@@ -72,7 +72,7 @@ def main():
         dst = TRANSLATIONS[src]
         if CODE_RE.findall(src) != CODE_RE.findall(dst):
             issues.append((src, "códigos RPG Maker diferentes"))
-        if sorted(__import__("re").findall(r"%[1-9]\\d*", src)) != sorted(__import__("re").findall(r"%[1-9]\\d*", dst)):
+        if sorted(__import__("re").findall(r"%[1-9]\d*", src)) != sorted(__import__("re").findall(r"%[1-9]\d*", dst)):
             issues.append((src, "variables %n diferentes"))
     if issues:
         for src, why in issues:
