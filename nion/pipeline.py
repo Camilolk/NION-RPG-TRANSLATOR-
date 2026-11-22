@@ -110,11 +110,20 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                           "expansion_extrema", "reduccion_extrema",
                           "codigos_diferentes", "marcadores_diferentes"}
                 problems = severe.intersection(inspect_quality(core, translated))
+                if problems and hasattr(engine, "translate_repair"):
+                    try:
+                        retried = engine.translate_repair(core, src, tgt)
+                        retry_problems = severe.intersection(inspect_quality(core, retried))
+                        if not retry_problems:
+                            translated = retried
+                            problems = set()
+                            log("  RECUPERADO con decodificación alternativa: %s" % core[:70])
+                    except (EngineError, ValueError, RuntimeError) as error:
+                        log("  Reintento fallido: %s" % error)
                 if problems:
                     log("  ALERTA calidad: %s | texto: %s" %
                         (", ".join(sorted(problems)), core[:90]))
-                    # No guardar respuestas corruptas. Quedan pendientes
-                    # para una futura revision o reintento manual.
+                    # Nunca guardar respuestas que sigan siendo sospechosas.
                     continue
                 memory.set(core, translated)
             memory.save()
