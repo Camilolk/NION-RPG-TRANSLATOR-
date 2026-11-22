@@ -217,13 +217,22 @@ class LlamaCppEngine(Engine):
 
 
 class MarianEngine(Engine):
-    """Traductor local MarianMT para inglés -> español (CPU)."""
+    """Traductor local MarianMT con selección de modelo por idioma (CPU)."""
     name = "marian"
     max_batch = 16
     supports_masking = False
 
-    def __init__(self, model_id="Helsinki-NLP/opus-mt-en-es"):
+    MODELS = {
+        ("en", "es"): "Helsinki-NLP/opus-mt-en-es",
+        ("en", "fr"): "Helsinki-NLP/opus-mt-en-fr",
+        ("en", "de"): "Helsinki-NLP/opus-mt-en-de",
+        ("en", "it"): "Helsinki-NLP/opus-mt-en-it",
+        ("en", "ru"): "Helsinki-NLP/opus-mt-en-ru",
+    }
+
+    def __init__(self, model_id=None):
         self.model_id = model_id
+        self._active_pair = None
         self._tokenizer = None
         self._model = None
 
@@ -245,10 +254,26 @@ class MarianEngine(Engine):
         except Exception as error:
             raise EngineError("No se pudo cargar MarianMT: %s" % error) from error
 
+    def _select_pair(self, src, tgt):
+        source = src.lower().replace("_", "-")
+        target = tgt.lower().replace("_", "-")
+        pair = (source, target)
+        model_id = self.MODELS.get(pair)
+        if model_id is None:
+            raise EngineError(
+                "MarianMT no tiene un modelo configurado para %s -> %s. "
+                "Pares disponibles: %s." %
+                (src, tgt, ", ".join("%s->%s" % p for p in self.MODELS))
+            )
+        if self._active_pair != pair:
+            self.model_id = model_id
+            self._tokenizer = None
+            self._model = None
+            self._active_pair = pair
+
     def translate_repair(self, text, src="en", tgt="es"):
         """Decodificacion alternativa, solo para reparaciones solicitadas."""
-        if src.lower() != "en" or tgt.lower() != "es":
-            raise EngineError("MarianMT solo admite en -> es.")
+        self._select_pair(src, tgt)
         self._load()
         import torch
         inputs = self._tokenizer(
@@ -264,8 +289,7 @@ class MarianEngine(Engine):
         return self._tokenizer.batch_decode(generated, skip_special_tokens=True)[0]
 
     def translate_batch(self, texts, src, tgt):
-        if src.lower() != "en" or tgt.lower() != "es":
-            raise EngineError("El modelo MarianMT instalado solo admite en -> es.")
+        self._select_pair(src, tgt)
         if not texts:
             return []
         self._load()
