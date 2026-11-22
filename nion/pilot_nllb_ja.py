@@ -19,6 +19,17 @@ CATEGORY_LABELS = {
 }
 CATEGORY_RE = re.compile(r"^(\s*)(\[[A-Za-z][A-Za-z ]{0,40}\])(\s*)")
 
+# Traducciones exactas para frases de inventario y mensajes RPG comprobados.
+# No sustituir palabras sueltas en contextos desconocidos.
+EXACT_RPG_JA = {
+    "A charm that increases Defense.": "防御力を上げるお守り。",
+    "A charm that increases Attack.": "攻撃力を上げるお守り。",
+    "A charm that increases Agility.": "敏捷性を上げるお守り。",
+    "A charm that increases Luck.": "運を上げるお守り。",
+    "You've already ventured into the dungeon today.": "今日はすでにダンジョンに入っています。",
+    "This vein has already been depleted.": "この鉱脈はすでに採掘し尽くされています。",
+}
+
 
 
 def check_labels():
@@ -83,6 +94,7 @@ def main():
     # Cada oración se traduce individualmente, pero se ejecuta en lotes.
     pieces, owners = [], []
     prefixes = [""] * len(sources)
+    exact_results = {}
     for index, source in enumerate(sources):
         body = source
         label_match = CATEGORY_RE.match(source)
@@ -91,6 +103,9 @@ def main():
                                + CATEGORY_LABELS[label_match.group(2)]
                                + label_match.group(3))
             body = source[label_match.end():]
+        if body.strip() in EXACT_RPG_JA:
+            exact_results[index] = EXACT_RPG_JA[body.strip()]
+            continue
         for piece in split_sentences_safe(body):
             if piece.strip():
                 pieces.append(piece.strip())
@@ -113,7 +128,7 @@ def main():
         grouped[owner].append(result.strip())
     rows = []
     for i, (source, fragments) in enumerate(zip(sources, grouped), 1):
-        target_text = prefixes[i-1] + "".join(fragments)
+        target_text = prefixes[i-1] + exact_results.get(i-1, "".join(fragments))
         # Indicador heurístico, no evaluación semántica.
         suspicious = len(source) >= 50 and len(target_text) < max(6, int(len(source) * 0.17))
         rows.append({"id": i, "en": source, "ja": target_text,
