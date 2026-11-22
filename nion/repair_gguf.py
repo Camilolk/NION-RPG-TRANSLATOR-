@@ -63,7 +63,10 @@ def fidelity_warnings(source, candidate):
     ):
         alerts.append("tartamudeo_perdido_posible")
     # Avisar sobre preguntas sin signo de apertura (sin corregir automaticamente).
-    if "?" in candidate and "¿" not in candidate:
+    # Revisar cada pregunta por separado, no solo si existe algun signo de apertura.
+    # Ejemplo: "¿Todo bien? Y el dispositivo?" tiene una segunda pregunta sin ¿.
+    question_chunks = re.findall(r"[^?]*\\?", candidate)
+    if any("¿" not in chunk for chunk in question_chunks):
         alerts.append("interrogacion_sin_apertura")
     return alerts
 
