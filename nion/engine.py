@@ -228,7 +228,7 @@ class MarianEngine(Engine):
         ("en", "de"): "Helsinki-NLP/opus-mt-en-de",
         ("en", "it"): "Helsinki-NLP/opus-mt-en-it",
         ("en", "ru"): "Helsinki-NLP/opus-mt-en-ru",
-        ("en", "pt-br"): "Helsinki-NLP/opus-mt-tc-big-en-pt",
+        ("en", "pt-br"): "Helsinki-NLP/opus-mt-en-ROMANCE",
         ("en", "ja"): "Helsinki-NLP/opus-mt-en-jap",
         ("en", "zh"): "Helsinki-NLP/opus-mt-en-zh",
     }
@@ -277,8 +277,11 @@ class MarianEngine(Engine):
     @staticmethod
     def _prepare_texts(texts, tgt):
         # Chinese model is multilingual: force Simplified Mandarin.
-        if tgt.lower().replace("_", "-") == "zh":
+        target = tgt.lower().replace("_", "-")
+        if target == "zh":
             return [">>cmn_Hans<< " + text for text in texts]
+        if target == "pt-br":
+            return [">>pt<< " + text for text in texts]
         return texts
 
     def translate_repair(self, text, src="en", tgt="es"):
