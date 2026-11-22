@@ -21,6 +21,7 @@ def main(argv=None):
 
     scan_parser = sub.add_parser("scan", help="cuenta textos sin traducir ni gastar nada")
     common(scan_parser)
+    scan_parser.add_argument("--ja-original-names", action="store_true", help="japonés NLLB con nombres originales ingleses")
     translate_parser = sub.add_parser("translate", help="traduce lo que falta y lo guarda en la memoria")
     common(translate_parser)
     translate_parser.add_argument("--engine", default="deepl", help="echo | deepl | llamacpp | marian | m2m100 | ct2-pt")
@@ -37,6 +38,7 @@ def main(argv=None):
     apply_parser = sub.add_parser("apply", help="crea una COPIA completa traducida; nunca toca el original")
     common(apply_parser)
     apply_parser.add_argument("--out", help="carpeta de salida (por defecto <data>_<lang>)")
+    apply_parser.add_argument("--ja-original-names", action="store_true", help="japonés NLLB con nombres originales ingleses")
     apply_parser.add_argument("--textfit", action="store_true", help="ajusta cuadros de diálogo 101/401")
     apply_parser.add_argument("--textfit-width", type=int, default=48, help="ancho estimado por línea (por defecto 48)")
 
@@ -71,13 +73,15 @@ def main(argv=None):
         except (EngineError, FileNotFoundError, ValueError, OSError) as error:
             print("ERROR:", error, file=sys.stderr)
             return 1
+    if args.cmd in ("scan", "apply") and args.ja_original_names and args.lang.lower() != "ja":
+        parser.error("--ja-original-names solo es válido con --lang ja")
     memory = Memory(args.memory or "nion_memory_%s.json" % args.lang.lower())
     try:
         data_dir, entries = scan(args.game)
         glossary = load_glossary(args.glossary)
         names = protected_names(data_dir, glossary)
         if args.cmd == "scan":
-            todo = pending_texts(entries, memory, names, glossary)
+            todo = pending_texts(entries, memory, names, glossary, args.ja_original_names)
             print("Carpeta data:", data_dir)
             print("Entradas:", len(entries))
             print("Nombres protegidos:", len(names))
@@ -100,7 +104,8 @@ def main(argv=None):
                 raise ValueError("--textfit-width debe estar entre 15 y 100")
             applied, missing = apply_translations(
                 args.game, output, memory, glossary=glossary,
-                textfit=args.textfit, textfit_width=args.textfit_width)
+                textfit=args.textfit, textfit_width=args.textfit_width,
+                ja_original_names=args.ja_original_names)
             if missing:
                 with open("faltan.txt", "w", encoding="utf-8") as fh:
                     fh.write("\n".join(missing))
