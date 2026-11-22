@@ -7,16 +7,18 @@ BLOCKING = frozenset({
     "traduccion_vacia", "repeticion_anomala", "expansion_extrema",
     "reduccion_extrema", "codigos_diferentes", "marcadores_diferentes",
     "preguntas_omitidas_posibles", "sin_traducir", "tartamudeo_perdido_posible",
+    "interrogacion_sin_apertura",
 })
 
 
-def review_alerts(source, candidate):
+def review_alerts(source, candidate, tgt="es"):
     """Combina calidad, cobertura de preguntas y fidelidad sin afirmar equivalencia."""
     if not isinstance(candidate, str):
         return ["traduccion_vacia"]
     alerts = set(inspect(source, candidate))
     alerts.update(semantic_warnings(source, candidate))
-    alerts.update(fidelity_warnings(source, candidate))
+    if tgt.lower().split("-")[0] == "es":
+        alerts.update(fidelity_warnings(source, candidate))
     # Contar solo signos de cierre: el signo español de apertura no es otra pregunta.
     if source.count("?") > candidate.count("?"):
         alerts.add("preguntas_omitidas_posibles")
@@ -37,7 +39,7 @@ def translate_guarded(texts, engine, src="en", tgt="es", qwen_engine=None):
         if len(translations) != len(batch):
             raise ValueError("El motor devolvio un numero incorrecto de traducciones")
         for source, candidate in zip(batch, translations):
-            initial = review_alerts(source, candidate)
+            initial = review_alerts(source, candidate, tgt)
             blocking = BLOCKING.intersection(initial)
             retry = None
             final = candidate
@@ -45,7 +47,7 @@ def translate_guarded(texts, engine, src="en", tgt="es", qwen_engine=None):
             if blocking and hasattr(engine, "translate_repair"):
                 try:
                     retry = engine.translate_repair(source, src, tgt)
-                    retry_alerts = sorted(set(review_alerts(source, retry)))
+                    retry_alerts = sorted(set(review_alerts(source, retry, tgt)))
                     # Aceptar solo si desaparecen TODOS los bloqueos.
                     if not BLOCKING.intersection(retry_alerts):
                         final, alerts = retry, retry_alerts
@@ -58,7 +60,7 @@ def translate_guarded(texts, engine, src="en", tgt="es", qwen_engine=None):
                 qwen_used = True
                 try:
                     proposal = qwen_engine.translate(source)
-                    proposal_alerts = review_alerts(source, proposal)
+                    proposal_alerts = review_alerts(source, proposal, tgt)
                     if not BLOCKING.intersection(proposal_alerts):
                         final, alerts = proposal, proposal_alerts
                 except Exception as error:
