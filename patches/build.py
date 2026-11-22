@@ -87,12 +87,12 @@ def main():
     parser = argparse.ArgumentParser(description="Crea 8 ZIP de traducciones v0.3.3")
     parser.add_argument("--game", required=True, type=Path, help="carpeta raíz con Game.exe y js/plugins.js")
     parser.add_argument("--translations", required=True, type=Path, help="carpeta NION_6_IDIOMAS")
-    parser.add_argument("--out", type=Path, help="carpeta de ZIP (predeterminado translations/parches_v0.3.3)")
+    parser.add_argument("--out", type=Path, help="carpeta de ZIP (predeterminado NION-RPG-TRANSLATOR-/parches_v0.3.3)")
     parser.add_argument("--langs", default=",".join(LANGUAGES), help="idiomas: es,pt,de,fr,it,ru,ja,zh")
     args = parser.parse_args()
     game = args.game.resolve()
     translations = args.translations.resolve()
-    out = (args.out or translations / "parches_v0.3.3").resolve()
+    out = (args.out or ROOT.parent / "parches_v0.3.3").resolve()
     plugin_path = game / "js" / "plugins.js"
     if not plugin_path.is_file():
         parser.error("No existe js/plugins.js en --game; indica la raíz real del juego.")
