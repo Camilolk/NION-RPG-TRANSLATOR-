@@ -362,24 +362,44 @@ class CTranslate2PortugueseEngine(Engine):
             raise EngineError("ct2-pt solo permite en -> pt-br.")
         if not texts:
             return []
+        # Only CT2 Portuguese gets these rules; other engines stay unchanged.
+        import re
+        tag_re = re.compile(r"^(\\s*(?:\\[[A-Za-z][A-Za-z ]{0,35}\\]\\s*)+)")
+        header_re = re.compile(r"^-{3,}\\s*[A-Za-z ]+\\s*$")
+        # Standalone item names and RPG section headers must not be mistranslated.
+        preserve = {"elixir"}
+        output = list(texts)
+        pending = []
+        for index, text in enumerate(texts):
+            if header_re.fullmatch(text.strip()) or text.strip().casefold() in preserve:
+                continue
+            match = tag_re.match(text)
+            prefix = match.group(0) if match else ""
+            core = text[len(prefix):]
+            if not core.strip():
+                continue
+            pending.append((index, prefix, core))
+        if not pending:
+            return output
         self._load()
         try:
             inputs = [
                 self._tokenizer.convert_ids_to_tokens(
-                    self._tokenizer.encode(">>pt<< " + text, truncation=True, max_length=512)
+                    self._tokenizer.encode(">>pt<< " + core, truncation=True, max_length=512)
                 )
-                for text in texts
+                for _, _, core in pending
             ]
             outputs = self._translator.translate_batch(
                 inputs, beam_size=1, max_decoding_length=512)
-            results = [
-                self._tokenizer.convert_tokens_to_string(item.hypotheses[0])
-                .replace("</s>", "").strip()
-                for item in outputs
-            ]
-            if len(results) != len(texts):
+            if len(outputs) != len(pending):
                 raise EngineError("CT2 portugués devolvió un lote incompleto.")
-            return results
+            for (index, prefix, core), item in zip(pending, outputs):
+                translated = (self._tokenizer.convert_tokens_to_string(item.hypotheses[0])
+                              .replace("</s>", "").strip())
+                if not translated:
+                    raise EngineError("CT2 portugués devolvió texto vacío.")
+                output[index] = prefix + translated
+            return output
         except EngineError:
             raise
         except Exception as error:
