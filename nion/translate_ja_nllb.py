@@ -78,6 +78,8 @@ def main():
     p.add_argument("--retry-rejected", action="store_true")
     p.add_argument("--beams", type=int, default=4,
                    help="Haces NLLB: 4 = calidad anterior, 1 = más rápido pero puede omitir contenido")
+    p.add_argument("--backend", choices=("torch", "ct2"), default="torch",
+                   help="torch = motor anterior; ct2 = NLLB INT8 CPU")
     p.add_argument("--threads", type=int, default=0,
                    help="Hilos CPU de PyTorch; 0 = automático")
     args = p.parse_args()
@@ -113,20 +115,29 @@ def main():
     if not segments:
         return
     selected = segments[:args.limit] if args.limit else segments
-    try:
-        import torch
-        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
-    except ImportError:
-        p.error("Faltan torch, transformers o sentencepiece")
-    if args.threads:
-        torch.set_num_threads(args.threads)
-    print("NLLB: beams=%d, hilos CPU=%s" % (args.beams, args.threads or "automático"), flush=True)
-    tokenizer = AutoTokenizer.from_pretrained("facebook/nllb-200-distilled-600M", src_lang="eng_Latn")
-    model = AutoModelForSeq2SeqLM.from_pretrained("facebook/nllb-200-distilled-600M")
-    model.eval()
-    target = tokenizer.convert_tokens_to_ids("jpn_Jpan")
-    if target == tokenizer.unk_token_id:
-        p.error("No se encontró jpn_Jpan")
+    if args.backend == "ct2":
+        from .nllb_ct2_ja import NLLBCT2Japanese
+        backend = NLLBCT2Japanese(threads=args.threads)
+        print("NLLB CT2 INT8: beams=%d, hilos=%s" %
+              (args.beams, args.threads or "automático"), flush=True)
+    else:
+        try:
+            import torch
+            from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+        except ImportError:
+            p.error("Faltan torch, transformers o sentencepiece")
+        if args.threads:
+            torch.set_num_threads(args.threads)
+        print("NLLB PyTorch: beams=%d, hilos=%s" %
+              (args.beams, args.threads or "automático"), flush=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            "facebook/nllb-200-distilled-600M", src_lang="eng_Latn")
+        model = AutoModelForSeq2SeqLM.from_pretrained(
+            "facebook/nllb-200-distilled-600M")
+        model.eval()
+        target = tokenizer.convert_tokens_to_ids("jpn_Jpan")
+        if target == tokenizer.unk_token_id:
+            p.error("No se encontró jpn_Jpan")
     os.makedirs(os.path.dirname(mem_path), exist_ok=True)
     done = accepted = rejected = 0
     def save_progress():
@@ -157,20 +168,35 @@ def main():
             outputs = []
             if to_translate:
                 texts = [item[1] for item in to_translate]
-                inputs = tokenizer(texts, padding=True, return_tensors="pt", truncation=False)
-                if inputs["input_ids"].shape[1] > 512:
-                    # Evitar que un segmento extremo interrumpa los demás.
-                    print("  Lote omitido por longitud >512 tokens:", offset)
-                    rejected += len(chunk)
-                    for source in chunk:
-                        rejected_data[source] = ["longitud_mayor_512_tokens"]
-                    done += len(chunk)
-                    save_progress()
-                    continue
-                with torch.inference_mode():
-                    ids = model.generate(**inputs, forced_bos_token_id=target,
-                                         num_beams=args.beams, max_new_tokens=160)
-                outputs = tokenizer.batch_decode(ids, skip_special_tokens=True)
+                if args.backend == "ct2":
+                    try:
+                        outputs = backend.translate(texts, beams=args.beams)
+                    except ValueError as exc:
+                        if str(exc) != "segmento_mayor_512_tokens":
+                            raise
+                        print("  Lote omitido por longitud >512 tokens:", offset)
+                        rejected += len(chunk)
+                        for source in chunk:
+                            rejected_data[source] = ["longitud_mayor_512_tokens"]
+                        done += len(chunk)
+                        save_progress()
+                        continue
+                else:
+                    inputs = tokenizer(texts, padding=True, return_tensors="pt", truncation=False)
+                    if inputs["input_ids"].shape[1] > 512:
+                        print("  Lote omitido por longitud >512 tokens:", offset)
+                        rejected += len(chunk)
+                        for source in chunk:
+                            rejected_data[source] = ["longitud_mayor_512_tokens"]
+                        done += len(chunk)
+                        save_progress()
+                        continue
+                    with torch.inference_mode():
+                        ids = model.generate(**inputs, forced_bos_token_id=target,
+                                             num_beams=args.beams, max_new_tokens=160)
+                    outputs = tokenizer.batch_decode(ids, skip_special_tokens=True)
+                if len(outputs) != len(to_translate):
+                    raise RuntimeError("El motor devolvió un lote incompleto")
             iterator = iter(outputs)
             for source, prepared, terms, exact in candidates:
                 translated = exact if exact is not None else next(iterator)
