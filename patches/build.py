@@ -24,7 +24,7 @@ PLUGIN_NAME = "NION_AutoWrap"
 PLUGIN_FILENAME = PLUGIN_NAME + ".js"
 
 
-def plugin_list(path):
+def plugin_list(path, font_size):
     raw = path.read_text(encoding="utf-8-sig")
     match = re.fullmatch(r"\s*(?:var|let|const)\s+\$plugins\s*=\s*(\[.*\])\s*;\s*", raw, re.S)
     if not match:
@@ -36,7 +36,7 @@ def plugin_list(path):
         raise ValueError("Lista de plugins inválida.")
     if any(item.get("name") == PLUGIN_NAME for item in items):
         raise ValueError("El juego ya registra NION_AutoWrap: revisar manualmente.")
-    items.append({"name": PLUGIN_NAME, "status": True, "description": "NION AutoWrap", "parameters": {}})
+    items.append({"name": PLUGIN_NAME, "status": True, "description": "NION AutoWrap", "parameters": {"fontSize": str(font_size)}})
     return "var $plugins =\n" + json.dumps(items, ensure_ascii=False, indent=2) + ";\n"
 
 
@@ -96,7 +96,6 @@ def main():
     plugin_path = game / "js" / "plugins.js"
     if not plugin_path.is_file():
         parser.error("No existe js/plugins.js en --game; indica la raíz real del juego.")
-    plugin_js = plugin_list(plugin_path)
     wrap_js = (ROOT / "AutoWrap.js").read_bytes()
     codes = [c.strip().lower() for c in args.langs.split(",")]
     if any(c not in LANGUAGES for c in codes) or len(codes) != len(set(codes)):
@@ -124,7 +123,7 @@ def main():
         with ZipFile(target, "w", compression=ZIP_DEFLATED, compresslevel=6) as zipfile:
             for file in files:
                 zipfile.write(file, "data/" + file.name)
-            zipfile.writestr("js/plugins.js", plugin_js)
+            zipfile.writestr("js/plugins.js", plugin_list(plugin_path, font_size))
             zipfile.writestr("js/plugins/" + PLUGIN_FILENAME, wrap_js)
             zipfile.writestr("README.txt", readme(code, name, font_size))
         with ZipFile(target) as zipfile:
