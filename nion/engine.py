@@ -310,6 +310,70 @@ class MarianEngine(Engine):
             raise EngineError("MarianMT no pudo traducir el lote: %s" % error) from error
 
 
+class M2M100Engine(Engine):
+    """Traducción multilingüe local con M2M100 (CPU)."""
+    name = "m2m100"
+    max_batch = 8
+    supports_masking = False
+    model_id = "facebook/m2m100_418M"
+    languages = {"en", "pt", "ja", "zh"}
+
+    def __init__(self):
+        self._tokenizer = None
+        self._model = None
+
+    def _load(self):
+        if self._model is not None:
+            return
+        try:
+            from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+        except ImportError as error:
+            raise EngineError(
+                "M2M100 requiere torch, transformers y sentencepiece."
+            ) from error
+        try:
+            self._tokenizer = M2M100Tokenizer.from_pretrained(self.model_id)
+            self._model = M2M100ForConditionalGeneration.from_pretrained(self.model_id)
+            self._model.eval()
+        except Exception as error:
+            raise EngineError("No se pudo cargar M2M100: %s" % error) from error
+
+    def translate_batch(self, texts, src, tgt):
+        source = src.lower().replace("_", "-")
+        target = tgt.lower().replace("_", "-")
+        if target == "pt-br":
+            target = "pt"
+        if source != "en" or target not in {"pt", "ja", "zh"}:
+            raise EngineError("M2M100 en NION admite en -> pt-br, ja, zh.")
+        if not texts:
+            return []
+        self._load()
+        import torch
+        try:
+            self._tokenizer.src_lang = source
+            inputs = self._tokenizer(
+                texts, return_tensors="pt", padding=True,
+                truncation=True, max_length=512
+            )
+            with torch.inference_mode():
+                generated = self._model.generate(
+                    **inputs,
+                    forced_bos_token_id=self._tokenizer.get_lang_id(target),
+                    max_new_tokens=512,
+                    num_beams=1
+                )
+            results = self._tokenizer.batch_decode(
+                generated, skip_special_tokens=True
+            )
+            if len(results) != len(texts):
+                raise EngineError("M2M100 devolvió un número distinto de textos.")
+            return results
+        except EngineError:
+            raise
+        except Exception as error:
+            raise EngineError("M2M100 no pudo traducir el lote: %s" % error) from error
+
+
 def get_engine(name, key=None, url=None):
     if name == "echo":
         return EchoEngine()
@@ -317,6 +381,8 @@ def get_engine(name, key=None, url=None):
         return DeepLEngine(key)
     if name == "marian":
         return MarianEngine()
+    if name == "m2m100":
+        return M2M100Engine()
     if name == "llamacpp":
         return LlamaCppEngine(url or "http://127.0.0.1:8080")
-    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp)" % name)
+    raise EngineError("Motor desconocido: %s (disponibles: echo, deepl, llamacpp, marian, m2m100)" % name)
