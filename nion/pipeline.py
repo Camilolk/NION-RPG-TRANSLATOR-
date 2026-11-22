@@ -109,11 +109,11 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                 severe = {"traduccion_vacia", "repeticion_anomala",
                           "expansion_extrema", "reduccion_extrema",
                           "codigos_diferentes", "marcadores_diferentes"}
-                problems = severe.intersection(inspect_quality(core, translated))
+                problems = severe.intersection(inspect_quality(core, translated, target_lang=tgt))
                 if problems and engine.name == "ct2-multi" and tgt != "zh" and hasattr(engine, "translate_repair"):
                     try:
                         retried = engine.translate_repair(core, src, tgt)
-                        retry_problems = severe.intersection(inspect_quality(core, retried))
+                        retry_problems = severe.intersection(inspect_quality(core, retried, target_lang=tgt))
                         if not retry_problems:
                             translated = retried
                             problems = set()
