@@ -32,7 +32,7 @@ def choices(rows, input_fn=input, output_fn=print):
         original = row.get("original", "")
         marian = row.get("propuesta", "")
         qwen = row.get("propuesta_gguf", "")
-        output_fn(f"\\n{'=' * 60}\\nCASO {number}/{len(rows)}\\n{'=' * 60}")
+        output_fn(f"\n{'=' * 60}\nCASO {number}/{len(rows)}\n{'=' * 60}")
         output_fn("ORIGINAL: " + original)
         output_fn("ACTUAL: " + str(row.get("traduccion_actual", "")))
         output_fn("MARIAN: " + str(marian))
