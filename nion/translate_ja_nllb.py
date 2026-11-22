@@ -101,7 +101,10 @@ def main():
         if not isinstance(rejected_data, dict):
             p.error("Registro de rechazos inválido")
     segments = collect(data_dir, memory, glossary)
-    if not args.retry_rejected:
+    if args.retry_rejected:
+        segments = [source for source in segments if source in rejected_data]
+        print("Modo recuperación: solo rechazos anteriores:", len(segments))
+    else:
         skipped = sum(source in rejected_data for source in segments)
         segments = [source for source in segments if source not in rejected_data]
         print("Rechazados previos omitidos:", skipped)
