@@ -23,7 +23,7 @@ def review_alerts(source, candidate):
     return sorted(alerts)
 
 
-def translate_guarded(texts, engine, src="en", tgt="es"):
+def translate_guarded(texts, engine, src="en", tgt="es", qwen_engine=None):
     """Devuelve resultados y alertas; no guarda en memoria ni sustituye el original."""
     if not isinstance(texts, list) or any(not isinstance(t, str) for t in texts):
         raise ValueError("texts debe ser una lista de cadenas")
@@ -52,6 +52,17 @@ def translate_guarded(texts, engine, src="en", tgt="es"):
                 except Exception as error:
                     retry = None
                     alerts = sorted(set(initial + ["reintento_fallido"]))
+            qwen_used = False
+            qwen_error = None
+            if BLOCKING.intersection(alerts) and qwen_engine is not None:
+                qwen_used = True
+                try:
+                    proposal = qwen_engine.translate(source)
+                    proposal_alerts = review_alerts(source, proposal)
+                    if not BLOCKING.intersection(proposal_alerts):
+                        final, alerts = proposal, proposal_alerts
+                except Exception as error:
+                    qwen_error = str(error)[:200]
             results.append({
                 "original": source,
                 "traduccion": final,
@@ -59,5 +70,7 @@ def translate_guarded(texts, engine, src="en", tgt="es"):
                 "estado": ("cuarentena" if BLOCKING.intersection(alerts)
                            else "reparada" if final != candidate else "lista"),
                 "reintento": bool(blocking),
+                "qwen_usado": qwen_used,
+                "qwen_error": qwen_error,
             })
     return results
