@@ -17,7 +17,7 @@ CATEGORY_LABELS = {
     "[Large Shield]": "[大盾]",
     "[Accessory]": "[アクセサリー]",
 }
-CATEGORY_RE = re.compile(r"^(\\s*)(\\[[A-Za-z][A-Za-z ]{0,40}\\])(\\s*)")
+CATEGORY_RE = re.compile(r"^(\s*)(\[[A-Za-z][A-Za-z ]{0,40}\])(\s*)")
 
 
 
