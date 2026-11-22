@@ -422,10 +422,10 @@ class CTranslate2PortugueseEngine(Engine):
                         return replacement.capitalize()
                     return replacement
                 translated = re.sub(
-                    r"\\b(?:" + "|".join(map(re.escape, brazilian_words)) + r")\\b",
+                    r"\b(?:" + "|".join(map(re.escape, brazilian_words)) + r")\b",
                     brazilianize, translated, flags=re.IGNORECASE)
                 translated = re.sub(
-                    r"\\b([Tt]emos) de (?=[a-zà-ú])",
+                    r"\b([Tt]emos) de (?=[a-zà-ú])",
                     lambda match: match.group(1) + " que ",
                     translated)
                 output[index] = prefix + translated
