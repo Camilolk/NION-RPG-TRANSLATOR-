@@ -47,20 +47,18 @@ def plugin_list(path, font_size):
         ) from error
     if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
         raise ValueError("Lista de plugins inválida.")
-    if any(item.get("name") == "AutoWrap" and item.get("status") for item in items):
-        return raw
-    if any(item.get("name") == PLUGIN_NAME for item in items):
-        raise ValueError("El juego ya registra NION_AutoWrap: revisar manualmente.")
-    items.append({"name": PLUGIN_NAME, "status": True,
-                  "description": "NION AutoWrap",
-                  "parameters": {"fontSize": str(font_size)}})
+    autowrap = [item for item in items if item.get("name") == "AutoWrap"]
+    if len(autowrap) != 1:
+        raise ValueError("Se esperaba exactamente un registro AutoWrap en js/plugins.js.")
+    autowrap[0]["status"] = True
+    # El ZIP incluye el AutoWrap instalado por NION en la copia de trabajo.
+    # No registra un segundo plugin que pueda entrar en conflicto.
     return (raw[:start] + json.dumps(items, ensure_ascii=False, indent=2)
             + raw[start + consumed:])
 
 
-def readme(code, name, font_size, use_existing=False):
-    plugin_note = ("AutoWrap original del juego, conservado sin duplicarlo." if use_existing
-                   else "NION_AutoWrap experimental, añadido a la lista de plugins.")
+def readme(code, name, font_size):
+    plugin_note = "AutoWrap añadido por NION; incluido y activado en este parche."
     return f"""NION RPG Translator — Parche {name} ({code})
 Compatible únicamente con Velgard's Trial v0.3.3
 ===================================================
@@ -82,8 +80,8 @@ Restaura las carpetas data y js que respaldaste antes de instalar.
 
 ARCHIVOS DEL PARCHE
 - data/*.json: traducción de textos del juego.
-- js/plugins.js: configuración original, con AutoWrap conservado o añadido.
-- js/plugins/AutoWrap.js o NION_AutoWrap.js: ajuste de líneas.\n- Plugin: {plugin_note}
+- js/plugins.js: configuración de plugins con AutoWrap activado.
+- js/plugins/AutoWrap.js: plugin de ajuste de líneas incluido.\n- Plugin: {plugin_note}
 - README.txt: estas instrucciones.
 
 TAMAÑO DE FUENTE
@@ -117,11 +115,12 @@ def main():
     existing_autowrap = (game / "js" / "plugins" / "AutoWrap.js")
     if not plugin_path.is_file():
         parser.error("No existe js/plugins.js en --game; indica la raíz real del juego.")
-    plugin_text = plugin_path.read_text(encoding="utf-8-sig")
-    use_existing = bool(re.search(r'"name"\s*:\s*"AutoWrap"\s*,\s*"status"\s*:\s*true', plugin_text))
-    if use_existing and not existing_autowrap.is_file():
-        parser.error("AutoWrap está activado pero falta js/plugins/AutoWrap.js.")
-    wrap_js = (existing_autowrap if use_existing else ROOT / "AutoWrap.js").read_bytes()
+    if not existing_autowrap.is_file():
+        parser.error("Falta js/plugins/AutoWrap.js en la copia del juego. "
+                     "Necesitamos el AutoWrap instalado por NION para incluirlo en cada ZIP.")
+    wrap_js = existing_autowrap.read_bytes()
+    # Comprobar el formato y la presencia de AutoWrap antes de crear ZIPs.
+    plugin_list(plugin_path, 0)
     codes = [c.strip().lower() for c in args.langs.split(",")]
     if any(c not in LANGUAGES for c in codes) or len(codes) != len(set(codes)):
         parser.error("Idiomas desconocidos o duplicados.")
@@ -149,8 +148,8 @@ def main():
             for file in files:
                 zipfile.write(file, "data/" + file.name)
             zipfile.writestr("js/plugins.js", plugin_list(plugin_path, font_size))
-            zipfile.writestr("js/plugins/" + ("AutoWrap.js" if use_existing else PLUGIN_FILENAME), wrap_js)
-            zipfile.writestr("README.txt", readme(code, name, font_size, use_existing))
+            zipfile.writestr("js/plugins/" + "AutoWrap.js", wrap_js)
+            zipfile.writestr("README.txt", readme(code, name, font_size))
         with ZipFile(target) as zipfile:
             corrupt = zipfile.testzip()
             if corrupt:
