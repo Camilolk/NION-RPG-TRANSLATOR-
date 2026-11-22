@@ -21,13 +21,34 @@ CATEGORY_RE = re.compile(r"^(\\s*)(\\[[A-Za-z][A-Za-z ]{0,40}\\])(\\s*)")
 
 
 
+def check_labels():
+    """Prueba rápida sin cargar NLLB ni leer datos del juego."""
+    examples = {
+        "[Large Shield] A large shield made of mithril.": "[大盾]",
+        "[General Equipment] A cloth headband.": "[一般装備]",
+        "[Accessory] A charm that increases Defense.": "[アクセサリー]",
+    }
+    for source, expected in examples.items():
+        match = CATEGORY_RE.match(source)
+        if match is None or CATEGORY_LABELS.get(match.group(2)) != expected:
+            raise AssertionError("Etiqueta no reconocida: " + source)
+        print("OK:", match.group(2), "->", expected)
+    print("Protección de etiquetas: OK")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("game", help="Carpeta data del juego original en inglés")
+    parser.add_argument("game", nargs="?", help="Carpeta data del juego original en inglés")
+    parser.add_argument("--check-labels", action="store_true", help="Verificar etiquetas sin cargar el modelo")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--out", help="Reporte JSON nuevo, opcional (no memoria)")
     args = parser.parse_args()
+    if args.check_labels:
+        check_labels()
+        return
+    if not args.game:
+        parser.error("Falta la carpeta data del juego")
     if not 1 <= args.limit <= 1000 or not 1 <= args.batch_size <= 16:
         parser.error("--limit debe ser 1..1000 y --batch-size 1..16")
     if args.out and os.path.exists(args.out):
