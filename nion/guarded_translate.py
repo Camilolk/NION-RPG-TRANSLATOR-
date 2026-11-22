@@ -37,7 +37,7 @@ def translate_guarded(texts, engine, src="en", tgt="es"):
         if len(translations) != len(batch):
             raise ValueError("El motor devolvio un numero incorrecto de traducciones")
         for source, candidate in zip(batch, translations):
-            initial = sorted(set(inspect(source, candidate)))
+            initial = review_alerts(source, candidate)
             blocking = BLOCKING.intersection(initial)
             retry = None
             final = candidate
