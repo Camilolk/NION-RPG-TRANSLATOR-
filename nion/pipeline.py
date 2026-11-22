@@ -126,9 +126,13 @@ def translate_pending(entries, memory, engine, src, tgt, log=print,
                     # Nunca guardar respuestas que sigan siendo sospechosas.
                     continue
                 memory.set(core, translated)
-            memory.save()
             done += len(chunk)
+            # Evitar reescribir miles de entradas JSON tras cada lote de 16.
+            # Se guarda cada 320 segmentos y al finalizar la fase.
+            if done % (engine.max_batch * 20) == 0:
+                memory.save()
             log("  trozos %d / %d" % (done, len(segments)))
+        memory.save()
         for text in leftovers:
             composed = compose_from_segments(prepared_texts[text], memory, ())
             if composed is not None:
