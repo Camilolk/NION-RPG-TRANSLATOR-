@@ -25,19 +25,35 @@ PLUGIN_FILENAME = PLUGIN_NAME + ".js"
 
 
 def plugin_list(path, font_size):
+    """Registra AutoWrap conservando intactos los plugins existentes.
+
+    Soporta prefijos/comentarios habituales y plugins.js con asignación
+    de una lista JSON. No evalúa JavaScript arbitrario.
+    """
     raw = path.read_text(encoding="utf-8-sig")
-    match = re.fullmatch(r"\s*(?:var|let|const)\s+\$plugins\s*=\s*(\[.*\])\s*;\s*", raw, re.S)
-    if not match:
-        raise ValueError("Formato js/plugins.js no reconocido. No se modifica ni se empaqueta.")
-    items = json.loads(match.group(1))
-    if not isinstance(items, list):
-        raise ValueError("js/plugins.js no contiene una lista.")
-    if any(not isinstance(item, dict) for item in items):
+    assignment = re.search(r"\\b(?:var|let|const)\\s+\\$plugins\\s*=\\s*", raw)
+    if not assignment:
+        raise ValueError("No se encontró la asignación $plugins en js/plugins.js.")
+    start = raw.find("[", assignment.end())
+    if start < 0 or raw[assignment.end():start].strip():
+        raise ValueError("No se encontró la lista de plugins tras $plugins.")
+    decoder = json.JSONDecoder()
+    try:
+        items, consumed = decoder.raw_decode(raw[start:])
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            "js/plugins.js no usa JSON estricto. Comparte su contenido "
+            "para adaptar el lector sin alterar plugins existentes."
+        ) from error
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
         raise ValueError("Lista de plugins inválida.")
     if any(item.get("name") == PLUGIN_NAME for item in items):
         raise ValueError("El juego ya registra NION_AutoWrap: revisar manualmente.")
-    items.append({"name": PLUGIN_NAME, "status": True, "description": "NION AutoWrap", "parameters": {"fontSize": str(font_size)}})
-    return "var $plugins =\n" + json.dumps(items, ensure_ascii=False, indent=2) + ";\n"
+    items.append({"name": PLUGIN_NAME, "status": True,
+                  "description": "NION AutoWrap",
+                  "parameters": {"fontSize": str(font_size)}})
+    return (raw[:start] + json.dumps(items, ensure_ascii=False, indent=2)
+            + raw[start + consumed:])
 
 
 def readme(code, name, font_size):
