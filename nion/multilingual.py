@@ -40,7 +40,11 @@ def run_all(args):
                 failed.append(lang)
                 continue
             try:
-                engine = get_engine(LANG_ENGINES[lang])
+                engine_name = ("ct2-multi" if getattr(args, "fast", False)
+                               and lang in {"fr", "de", "it", "ru", "zh"}
+                               else LANG_ENGINES[lang])
+                print("Motor:", engine_name, flush=True)
+                engine = get_engine(engine_name)
                 translate_pending(entries, memory, engine, "en", lang,
                                   protected_terms=names, glossary=glossary)
             except (EngineError, OSError, ValueError) as error:
