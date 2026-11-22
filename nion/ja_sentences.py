@@ -6,7 +6,7 @@ import re
 from .codes import CODE_RE
 
 # Delimitador tras oración; no consume puntuación ni espacios.
-_SENTENCE_END = re.compile(r"[.!?]+(?=\\s+[A-Z])")
+_SENTENCE_END = re.compile(r"[.!?]+(?=\s+[A-Z])")
 _ABBREVIATIONS = {"mr.", "mrs.", "ms.", "dr.", "prof.", "st.", "vs.", "etc.", "e.g.", "i.e."}
 
 
@@ -31,10 +31,10 @@ def split_sentences_safe(text):
         if last_word in _ABBREVIATIONS:
             continue
         # Evitar dividir en abreviaturas con iniciales (p. ej. A. Smith).
-        if re.search(r"\\b[A-Za-z]\\.$", before):
+        if re.search(r"\b[A-Za-z]\.$", before):
             continue
         # Preservar los espacios exactos en el fragmento anterior.
-        whitespace = re.match(r"\\s+", text[end:])
+        whitespace = re.match(r"\s+", text[end:])
         if not whitespace:
             continue
         split_at = end + len(whitespace.group())
