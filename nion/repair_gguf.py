@@ -65,7 +65,7 @@ def fidelity_warnings(source, candidate):
     # Avisar sobre preguntas sin signo de apertura (sin corregir automaticamente).
     # Revisar cada pregunta por separado, no solo si existe algun signo de apertura.
     # Ejemplo: "¿Todo bien? Y el dispositivo?" tiene una segunda pregunta sin ¿.
-    question_chunks = re.findall(r"[^?]*\\?", candidate)
+    question_chunks = re.findall(r"[^?]*\?", candidate)
     if any("¿" not in chunk for chunk in question_chunks):
         alerts.append("interrogacion_sin_apertura")
     return alerts
