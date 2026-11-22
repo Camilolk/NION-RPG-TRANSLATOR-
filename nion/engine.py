@@ -364,8 +364,8 @@ class CTranslate2PortugueseEngine(Engine):
             return []
         # Only CT2 Portuguese gets these rules; other engines stay unchanged.
         import re
-        tag_re = re.compile(r"^(\\s*(?:\\[[A-Za-z][A-Za-z ]{0,35}\\]\\s*)+)")
-        header_re = re.compile(r"^-{3,}\\s*[A-Za-z ]+\\s*$")
+        tag_re = re.compile(r"^(\s*(?:\[[A-Za-z][A-Za-z ]{0,35}\]\s*)+)")
+        header_re = re.compile(r"^-{3,}\s*[A-Za-z ]+\s*$")
         # Standalone item names and RPG section headers must not be mistranslated.
         preserve = {"elixir"}
         output = list(texts)
