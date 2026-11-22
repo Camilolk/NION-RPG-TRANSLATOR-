@@ -2,8 +2,8 @@
 
 No modifica memorias ni archivos de juego.
 """
-import re
 import time
+from .ja_sentences import split_sentences_safe
 
 SAMPLES = [
     "Woah, so you can see me? You must be a really powerful mage.",
@@ -13,9 +13,6 @@ SAMPLES = [
     "A vest made of tanned hide.",
     "Linen clothing with high breathability.",
 ]
-# Dividir solo en puntuación final seguida de espacio y mayúscula.
-# Evitar puntos suspensivos y abreviaturas en este experimento.
-BOUNDARY = re.compile(r"(?<=[!?])\s+(?=[A-Z])|(?<!\.)\.(?!\.)\s+(?=[A-Z])")
 
 def main():
     import torch
@@ -27,7 +24,8 @@ def main():
     model.eval()
     target = tokenizer.convert_tokens_to_ids("jpn_Jpan")
     for source in SAMPLES:
-        parts = [p.strip() for p in BOUNDARY.split(source) if p.strip()]
+        parts = split_sentences_safe(source)
+        assert ''.join(parts) == source
         print("\nEN:", source)
         print("PARTES:", repr(parts))
         for label, pieces in [("completo", [source]), ("separado", parts)]:
@@ -39,7 +37,7 @@ def main():
                                      num_beams=4, max_new_tokens=160)
             translated = tokenizer.batch_decode(ids, skip_special_tokens=True)
             print("%s (%.2f s): %s" % (label, time.perf_counter()-start,
-                                       " ".join(translated)), flush=True)
+                                       "".join(translated)), flush=True)
     print("\nPrueba terminada; no se guardó ninguna traducción.")
 
 if __name__ == "__main__":
