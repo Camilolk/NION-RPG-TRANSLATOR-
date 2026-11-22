@@ -26,6 +26,50 @@ def render(text, memory, protected_terms=(), glossary=None):
             or compose_from_segments(prepared, memory, ()))
 
 
+def render_ja_original_names(text, memory, glossary=None):
+    """Reconstruye japonés NLLB preservando los nombres oficiales en inglés.
+
+    Las frases completas NLLB tienen prioridad; la verificación final evita
+    transliteraciones accidentales de nombres que figuran en el original.
+    """
+    import re
+    from .codes import split_parts
+
+    glossary = glossary or load_glossary()
+    prepared = normalize_names(text, glossary)
+    original_names = glossary["canonical"]
+    # Los segmentos japoneses existentes se tradujeron sin dividir nombres.
+    result = (memory[prepared] if prepared in memory
+              else compose_from_segments(prepared, memory, ()))
+    if result is None:
+        return None
+
+    # Sustituye transliteraciones conocidas solo cuando el nombre está en el
+    # texto de origen. No altera nombres que no se mencionan en el original.
+    ja_names = {
+        "Elio": ("エリオ", "エリオー"),
+        "Erika": ("エリカ",),
+        "Shiori": ("シオリ",),
+        "Grant": ("グラント",),
+        "Kael": ("カエル", "ケイル"),
+        "Ryou": ("リョウ", "リョー"),
+        "Tama": ("タマ",),
+    }
+    present = {
+        name for token, name in ((part, part.rstrip(":")) for is_token, part in
+                split_parts(prepared, original_names) if is_token)
+        if name in original_names
+    }
+    for name in present:
+        for variant in ja_names.get(name, ()):
+            result = result.replace(variant, name)
+    # Si la traducción omite un nombre original, no se acepta silenciosamente.
+    for name in present:
+        if name not in result:
+            return None
+    return result
+
+
 def pending_texts(entries, memory, protected_terms=(), glossary=None):
     glossary = glossary or load_glossary()
     seen, out = set(), []
