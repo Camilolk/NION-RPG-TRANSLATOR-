@@ -1,5 +1,5 @@
 import unittest
-from nion.guarded_translate import translate_guarded
+from nion.guarded_translate import translate_guarded, review_alerts
 
 
 class FakeEngine:
@@ -35,6 +35,17 @@ class GuardedTests(unittest.TestCase):
             def translate_batch(self, texts, src, tgt):
                 return ["!" * 40 for _ in texts]
         self.assertEqual(translate_guarded(["No!"], OnlyBatch())[0]["estado"], "cuarentena")
+
+    def test_omitted_question_is_detected(self):
+        source = "What happened? And the device?"
+        target = "¿Qué pasó?"
+        self.assertIn("preguntas_omitidas_posibles", review_alerts(source, target))
+
+    def test_stuttering_loss_is_detected(self):
+        self.assertIn("tartamudeo_perdido_posible", review_alerts("N-No!!", "¡No!"))
+
+    def test_untranslated_is_detected(self):
+        self.assertIn("sin_traducir", review_alerts("N-No!!", "N-No!!"))
 
     def test_empty_batch(self):
         self.assertEqual(translate_guarded([], FakeEngine()), [])
